@@ -52,37 +52,37 @@ integer    = Token.integer    lexer
 string     = Token.stringLiteral lexer
 
 
-parseLiteral :: Parser (Expression a)
+parseLiteral :: Parser Expression
 parseLiteral = liftM I (liftM fromInteger integer)
                 <|> liftM S string
                 <|> (reserved "true" >> (return $ B True))
                 <|> (reserved "false" >> (return $ B False))
 
-parseVariable :: Parser (Expression String)
+parseVariable :: Parser Expression
 parseVariable = (reserved "this" >> (return $ B True))
                  <|> liftM Var identifier
 
-parsePrimaryExpression :: Parser (Expression String)
+parsePrimaryExpression :: Parser Expression
 parsePrimaryExpression = parseLiteral
                          <|> parseVariable
 
 
-makeBinaryNode :: ((Expression a) -> (Expression a) -> (Expression a)) ->
-                  (Expression a) -> (Expression a) -> (Expression a)
+makeBinaryNode :: (Expression -> Expression -> Expression) ->
+                  Expression -> Expression -> Expression
 makeBinaryNode _ node Empty  = node
 makeBinaryNode _ Empty node = node
 makeBinaryNode parentNode node1 node2  = parentNode node1 node2
 
-parseBinaryOp :: Parser (Expression a) -> 
-                 Parser ((Expression a) -> (Expression a) -> (Expression a)) ->
-                 Parser (Expression a)
+parseBinaryOp :: Parser Expression -> 
+                 Parser (Expression -> Expression -> Expression) ->
+                 Parser Expression
 parseBinaryOp parseSubExp parseOp = 
   chainl parseSubExp (liftM makeBinaryNode parseOp) Empty
 
-parseMultiplicativeOp :: Parser ((Expression a) -> (Expression a) -> (Expression a))
+parseMultiplicativeOp :: Parser (Expression -> Expression -> Expression)
 parseMultiplicativeOp = (reservedOp "*" >> (return $ Multiplicative "*"))
                         <|> (reservedOp "/" >> (return $ Multiplicative "/"))
 
-parseMultiplicativeExpression :: Parser (Expression String)
+parseMultiplicativeExpression :: Parser Expression
 parseMultiplicativeExpression =
   parseBinaryOp parsePrimaryExpression parseMultiplicativeOp
