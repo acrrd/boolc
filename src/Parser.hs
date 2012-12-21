@@ -53,7 +53,7 @@ string     = Token.stringLiteral lexer
 
 
 parseExpression :: Parser Expression
-parseExpression = parseAdditiveExpression
+parseExpression = parseBooleanOrExpression
 
 parseLiteral :: Parser Expression
 parseLiteral = liftM I (liftM fromInteger integer)
@@ -97,3 +97,15 @@ parseAdditiveOp = (reservedOp "+" >> (return $ Additive "+"))
 parseAdditiveExpression :: Parser Expression
 parseAdditiveExpression =
   parseBinaryOp parseMultiplicativeExpression parseAdditiveOp
+
+parseRelationalExpression :: Parser Expression
+parseRelationalExpression = parseAdditiveExpression
+
+parseEqualityExpression :: Parser Expression
+parseEqualityExpression = parseRelationalExpression
+
+parseBooleanAndExpression :: Parser Expression
+parseBooleanAndExpression = parseEqualityExpression
+
+parseBooleanOrExpression :: Parser Expression
+parseBooleanOrExpression = parseBooleanAndExpression
