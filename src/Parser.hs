@@ -52,6 +52,9 @@ integer    = Token.integer    lexer
 string     = Token.stringLiteral lexer
 
 
+parseExpression :: Parser Expression
+parseExpression = parseAdditiveExpression
+
 parseLiteral :: Parser Expression
 parseLiteral = liftM I (liftM fromInteger integer)
                 <|> liftM S string
@@ -65,7 +68,7 @@ parseVariable = (reserved "this" >> (return $ Var "this"))
 parsePrimaryExpression :: Parser Expression
 parsePrimaryExpression = parseLiteral
                          <|> parseVariable
-
+                         <|> parens parseExpression
 
 makeBinaryNode :: (Expression -> Expression -> Expression) ->
                   Expression -> Expression -> Expression
@@ -86,3 +89,11 @@ parseMultiplicativeOp = (reservedOp "*" >> (return $ Multiplicative "*"))
 parseMultiplicativeExpression :: Parser Expression
 parseMultiplicativeExpression =
   parseBinaryOp parsePrimaryExpression parseMultiplicativeOp
+
+parseAdditiveOp :: Parser (Expression -> Expression -> Expression)
+parseAdditiveOp = (reservedOp "+" >> (return $ Additive "+"))
+                        <|> (reservedOp "-" >> (return $ Additive "-"))
+
+parseAdditiveExpression :: Parser Expression
+parseAdditiveExpression =
+  parseBinaryOp parseMultiplicativeExpression parseAdditiveOp
