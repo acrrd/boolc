@@ -59,7 +59,7 @@ parseLiteral = liftM I (liftM fromInteger integer)
                 <|> (reserved "false" >> (return $ B False))
 
 parseVariable :: Parser Expression
-parseVariable = (reserved "this" >> (return $ B True))
+parseVariable = (reserved "this" >> (return $ Var "this"))
                  <|> liftM Var identifier
 
 parsePrimaryExpression :: Parser Expression
