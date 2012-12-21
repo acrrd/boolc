@@ -8,10 +8,17 @@ license:             GPL-3
 author:              Andrea Corradi
 maintainer:          andreac@unstable.it
 build-type:          Simple
-cabal-version:       >=1.8
+cabal-version:       >=1.2
 
 executable boolc
   build-depends: base ==4.5.*, parsec
   main-is: Main.hs
   other-modules: Ast, Parser
   hs-source-dirs: src
+
+Test-Suite boolc-test
+  build-depends: HUnit,test-framework,test-framework-hunit
+  hs-source-dirs: src,tests
+  main-is: Test.hs
+  type: exitcode-stdio-1.0
+
