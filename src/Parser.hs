@@ -25,6 +25,7 @@ languageDef = emptyDef
                                     ,"null"
                                     ,"true"
                                     ,"false"
+                                    ,"void"
                                     ,"int"
                                     ,"bool"
                                    ]
