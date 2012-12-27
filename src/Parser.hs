@@ -77,10 +77,10 @@ makeBinaryNode _ node Empty  = node
 makeBinaryNode _ Empty node = node
 makeBinaryNode parentNode node1 node2  = parentNode node1 node2
 
-parseBinaryOp :: Parser Expression -> 
+parseBinaryExpression :: Parser Expression -> 
                  Parser (Expression -> Expression -> Expression) ->
                  Parser Expression
-parseBinaryOp parseSubExp parseOp = 
+parseBinaryExpression parseSubExp parseOp = 
   chainl parseSubExp (liftM makeBinaryNode parseOp) Empty
 
 parseMultiplicativeOp :: Parser (Expression -> Expression -> Expression)
@@ -89,7 +89,7 @@ parseMultiplicativeOp = (reservedOp "*" >> (return $ Multiplicative "*"))
 
 parseMultiplicativeExpression :: Parser Expression
 parseMultiplicativeExpression =
-  parseBinaryOp parsePrimaryExpression parseMultiplicativeOp
+  parseBinaryExpression parsePrimaryExpression parseMultiplicativeOp
 
 parseAdditiveOp :: Parser (Expression -> Expression -> Expression)
 parseAdditiveOp = (reservedOp "+" >> (return $ Additive "+"))
@@ -97,7 +97,7 @@ parseAdditiveOp = (reservedOp "+" >> (return $ Additive "+"))
 
 parseAdditiveExpression :: Parser Expression
 parseAdditiveExpression =
-  parseBinaryOp parseMultiplicativeExpression parseAdditiveOp
+  parseBinaryExpression parseMultiplicativeExpression parseAdditiveOp
 
 parseRelationalExpression :: Parser Expression
 parseRelationalExpression = parseAdditiveExpression
