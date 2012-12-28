@@ -77,27 +77,25 @@ makeBinaryNode _ node Empty  = node
 makeBinaryNode _ Empty node = node
 makeBinaryNode parentNode node1 node2  = parentNode node1 node2
 
-parseBinaryExpression :: Parser Expression -> 
-                 Parser (Expression -> Expression -> Expression) ->
-                 Parser Expression
-parseBinaryExpression parseSubExp parseOp = 
-  chainl parseSubExp (liftM makeBinaryNode parseOp) Empty
+parseBinaryOp :: (String -> Expression -> Expression -> Expression) ->
+                 [String] ->
+                 Parser (Expression -> Expression -> Expression)
+parseBinaryOp node ops = choice $ map (\op -> reservedOp op >> (return $ node op)) ops
 
-parseMultiplicativeOp :: Parser (Expression -> Expression -> Expression)
-parseMultiplicativeOp = (reservedOp "*" >> (return $ Multiplicative "*"))
-                        <|> (reservedOp "/" >> (return $ Multiplicative "/"))
+parseBinaryExpression :: Parser Expression -> 
+                         (String -> Expression -> Expression -> Expression) ->
+                         [String] ->
+                         Parser Expression
+parseBinaryExpression parseSubExp node ops = 
+  chainl parseSubExp (liftM makeBinaryNode (parseBinaryOp node ops)) Empty
 
 parseMultiplicativeExpression :: Parser Expression
 parseMultiplicativeExpression =
-  parseBinaryExpression parsePrimaryExpression parseMultiplicativeOp
-
-parseAdditiveOp :: Parser (Expression -> Expression -> Expression)
-parseAdditiveOp = (reservedOp "+" >> (return $ Additive "+"))
-                        <|> (reservedOp "-" >> (return $ Additive "-"))
+  parseBinaryExpression parsePrimaryExpression Multiplicative ["*","/"]
 
 parseAdditiveExpression :: Parser Expression
 parseAdditiveExpression =
-  parseBinaryExpression parseMultiplicativeExpression parseAdditiveOp
+  parseBinaryExpression parseMultiplicativeExpression Additive ["+","-"]
 
 parseRelationalExpression :: Parser Expression
 parseRelationalExpression = parseAdditiveExpression
