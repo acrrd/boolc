@@ -86,9 +86,18 @@ parsePrimaryExpression = parseLiteral
                          <|> parseVariable
                          <|> parens parseExpression
 
+parsePostfixExpression :: Parser Expression
+parsePostfixExpression = parsePrimaryExpression
+
+parseUnaryExpressionNotPlusMinus :: Parser Expression
+parseUnaryExpressionNotPlusMinus = parsePostfixExpression
+
+parseUnaryExpression :: Parser Expression
+parseUnaryExpression = parseUnaryExpressionNotPlusMinus
+
 parseMultiplicativeExpression :: Parser Expression
 parseMultiplicativeExpression =
-  parseBinaryExpression parsePrimaryExpression Multiplicative ["*","/"]
+  parseBinaryExpression parseUnaryExpression Multiplicative ["*","/"]
 
 parseAdditiveExpression :: Parser Expression
 parseAdditiveExpression =
