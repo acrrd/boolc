@@ -98,13 +98,17 @@ parseAdditiveExpression =
   parseBinaryExpression parseMultiplicativeExpression Additive ["+","-"]
 
 parseRelationalExpression :: Parser Expression
-parseRelationalExpression = parseAdditiveExpression
+parseRelationalExpression = 
+  parseBinaryExpression parseAdditiveExpression Relational ["<","<=",">",">="]
 
 parseEqualityExpression :: Parser Expression
-parseEqualityExpression = parseRelationalExpression
+parseEqualityExpression = 
+  parseBinaryExpression parseRelationalExpression Equality ["==","!="]
 
 parseBooleanAndExpression :: Parser Expression
-parseBooleanAndExpression = parseEqualityExpression
+parseBooleanAndExpression = 
+  parseBinaryExpression parseEqualityExpression Boolean ["&&"]
 
 parseBooleanOrExpression :: Parser Expression
-parseBooleanOrExpression = parseBooleanAndExpression
+parseBooleanOrExpression =
+  parseBinaryExpression parseBooleanAndExpression Boolean ["||"]
