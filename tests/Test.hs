@@ -19,7 +19,11 @@ tests =
        testGroup "Variable" $ tests_variable parseVariable,
        testGroup "PrimaryExpression" $ tests_primaryExpression parsePrimaryExpression,
        testGroup "MultiplicativeExpression" $ tests_multiplicativeExpression parseMultiplicativeExpression,
-       testGroup "AdditiveExpression" $ tests_additiveExpression parseAdditiveExpression
+       testGroup "AdditiveExpression" $ tests_additiveExpression parseAdditiveExpression,
+       testGroup "RelationalExpression" $ tests_relationalExpression parseRelationalExpression,
+       testGroup "EqualitylExpression" $ tests_equalityExpression parseEqualityExpression,
+       testGroup "BooleanAndExpression" $ tests_booleanAndExpression parseBooleanAndExpression,
+       testGroup "BooleanOrExpression" $ tests_booleanOrExpression parseBooleanOrExpression
        ]
   ]
 
@@ -87,3 +91,46 @@ tests_additiveExpression p =
     testCase "add6" $ testParse p "(1+2)*3" (Multiplicative "*" (Additive "+" (I 1) (I 2)) (I 3)),
     testCase "add7" $ testParse p "3*(1+2)" (Multiplicative "*" (I 3) (Additive "+" (I 1) (I 2)))
   ]
+
+tests_relationalExpression p =
+  [
+    testCase "rel1" $ testParse p "1<1" (Relational "<" (I 1) (I 1)),
+    testCase "rel2" $ testParse p "1<=1" (Relational "<=" (I 1) (I 1)),
+    testCase "rel3" $ testParse p "1>1" (Relational ">" (I 1) (I 1)),
+    testCase "rel4" $ testParse p "1>=1" (Relational ">=" (I 1) (I 1)),
+    testCase "rel5" $ testParse p "1<1<=1" (Relational "<=" (Relational "<" (I 1) (I 1)) (I 1)),
+    testCase "rel6" $ testParse p "1<2+3" (Relational "<" (I 1) (Additive "+" (I 2) (I 3))),
+    testCase "rel7" $ testParse p "2+3<1" (Relational "<" (Additive "+" (I 2) (I 3)) (I 1)),
+    testCase "rel8" $ testParse p "(1<2)+3" (Additive "+" (Relational "<" (I 1) (I 2)) (I 3)),
+    testCase "rel9" $ testParse p "3+(1<2)" (Additive "+" (I 3) (Relational "<" (I 1) (I 2)))
+  ]
+
+tests_equalityExpression p =
+  [
+    testCase "eq1" $ testParse p "1==1" (Equality "==" (I 1) (I 1)),
+    testCase "eq2" $ testParse p "1!=1" (Equality "!=" (I 1) (I 1)),
+    testCase "eq5" $ testParse p "1!=1==1" (Equality "==" (Equality "!=" (I 1) (I 1)) (I 1)),
+    testCase "eq6" $ testParse p "1==2<3" (Equality "==" (I 1) (Relational "<" (I 2) (I 3))),
+    testCase "eq7" $ testParse p "2<3==1" (Equality "==" (Relational "<" (I 2) (I 3)) (I 1)),
+    testCase "eq8" $ testParse p "(1==2)<3" (Relational "<" (Equality "==" (I 1) (I 2)) (I 3)),
+    testCase "eq9" $ testParse p "3<(1==2)" (Relational "<" (I 3) (Equality "==" (I 1) (I 2)))
+  ]
+
+tests_booleanAndExpression p =
+  [
+    testCase "booland1" $ testParse p "1&&1" (Boolean "&&" (I 1) (I 1)),
+    testCase "booland2" $ testParse p "1&&2==3" (Boolean "&&" (I 1) (Equality "==" (I 2) (I 3))),
+    testCase "booland3" $ testParse p "2==3&&1" (Boolean "&&" (Equality "==" (I 2) (I 3)) (I 1)),
+    testCase "booland4" $ testParse p "(1&&2)==3" (Equality "==" (Boolean "&&" (I 1) (I 2)) (I 3)),
+    testCase "booland5" $ testParse p "3==(1&&2)" (Equality "==" (I 3) (Boolean "&&" (I 1) (I 2)))
+  ]
+
+tests_booleanOrExpression p =
+  [
+    testCase "boolor1" $ testParse p "1||1" (Boolean "||" (I 1) (I 1)),
+    testCase "boolor2" $ testParse p "1||2&&3" (Boolean "||" (I 1) (Boolean "&&" (I 2) (I 3))),
+    testCase "boolor3" $ testParse p "2&&3||1" (Boolean "||" (Boolean "&&" (I 2) (I 3)) (I 1)),
+    testCase "boolor4" $ testParse p "(1||2)&&3" (Boolean "&&" (Boolean "||" (I 1) (I 2)) (I 3)),
+    testCase "boolor5" $ testParse p "3&&(1||2)" (Boolean "&&" (I 3) (Boolean "||" (I 1) (I 2)))
+  ]
+
