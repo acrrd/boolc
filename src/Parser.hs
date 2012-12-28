@@ -53,24 +53,6 @@ integer    = Token.integer    lexer
 string     = Token.stringLiteral lexer
 
 
-parseExpression :: Parser Expression
-parseExpression = parseBooleanOrExpression
-
-parseLiteral :: Parser Expression
-parseLiteral = liftM I (liftM fromInteger integer)
-                <|> liftM S string
-                <|> (reserved "true" >> (return $ B True))
-                <|> (reserved "false" >> (return $ B False))
-
-parseVariable :: Parser Expression
-parseVariable = (reserved "this" >> (return $ Var "this"))
-                 <|> liftM Var identifier
-
-parsePrimaryExpression :: Parser Expression
-parsePrimaryExpression = parseLiteral
-                         <|> parseVariable
-                         <|> parens parseExpression
-
 makeBinaryNode :: (Expression -> Expression -> Expression) ->
                   Expression -> Expression -> Expression
 makeBinaryNode _ node Empty  = node
@@ -88,6 +70,21 @@ parseBinaryExpression :: Parser Expression ->
                          Parser Expression
 parseBinaryExpression parseSubExp node ops = 
   chainl parseSubExp (liftM makeBinaryNode (parseBinaryOp node ops)) Empty
+
+parseLiteral :: Parser Expression
+parseLiteral = liftM I (liftM fromInteger integer)
+                <|> liftM S string
+                <|> (reserved "true" >> (return $ B True))
+                <|> (reserved "false" >> (return $ B False))
+
+parseVariable :: Parser Expression
+parseVariable = (reserved "this" >> (return $ Var "this"))
+                 <|> liftM Var identifier
+
+parsePrimaryExpression :: Parser Expression
+parsePrimaryExpression = parseLiteral
+                         <|> parseVariable
+                         <|> parens parseExpression
 
 parseMultiplicativeExpression :: Parser Expression
 parseMultiplicativeExpression =
@@ -112,3 +109,6 @@ parseBooleanAndExpression =
 parseBooleanOrExpression :: Parser Expression
 parseBooleanOrExpression =
   parseBinaryExpression parseBooleanAndExpression Boolean ["||"]
+
+parseExpression :: Parser Expression
+parseExpression = parseBooleanOrExpression
