@@ -18,6 +18,8 @@ tests =
        testGroup "Literal" $ tests_literal parseLiteral,
        testGroup "Variable" $ tests_variable parseVariable,
        testGroup "PrimaryExpression" $ tests_primaryExpression parsePrimaryExpression,
+       testGroup "UnaryExpressionNotPlusMinus" $ tests_unaryExpressionNotPlusMinus parseUnaryExpressionNotPlusMinus,
+       testGroup "UnaryExpression" $ tests_unaryExpression parseUnaryExpression,
        testGroup "MultiplicativeExpression" $ tests_multiplicativeExpression parseMultiplicativeExpression,
        testGroup "AdditiveExpression" $ tests_additiveExpression parseAdditiveExpression,
        testGroup "RelationalExpression" $ tests_relationalExpression parseRelationalExpression,
@@ -27,14 +29,20 @@ tests =
        ]
   ]
 
-runParse :: Parser Expression -> String -> Expression
-runParse parser string = 
-  case (parse parser "" string) of
-    Left err  -> error $ show err
-    Right v  -> v
+runParse :: Parser Expression -> String -> Either ParseError Expression
+runParse parser string = parse parser "" string
 
 testParse :: Parser Expression -> String -> Expression -> Assertion
-testParse p s e = runParse p s @?= e
+testParse p s e =
+  case (runParse p s) of
+    Left err  -> assertFailure $ show err
+    Right v  -> v @?= e
+
+testParseFail :: Parser Expression -> String -> Assertion
+testParseFail p s =   case (parse p "" s) of
+    Left err  -> assertBool "" True
+    Right v  -> assertFailure $ "This test should fail but got: " ++ show v
+
 
 tests_literal p = 
   [
@@ -53,19 +61,55 @@ tests_variable p =
 tests_primaryExpression p = 
   tests_literal p ++ tests_variable p ++
   [
-    testCase "(variable)" $ testParse p "x" (Var "x"),
-    testCase "(this)" $ testParse p "this" (Var "this")
+    testCase "(variable)" $ testParse p "(x)" (Var "x"),
+    testCase "(this)" $ testParse p "(this)" (Var "this")
   ] ++
   [
-    testCase "(integer)" $ testParse p "123" (I 123),
-    testCase "(string)" $ testParse p "\"foo\"" (S "foo"),
-    testCase "(true)" $ testParse p "true" (B True),
-    testCase "(false)" $ testParse p "false" (B False)
+    testCase "(integer)" $ testParse p "(123)" (I 123),
+    testCase "(string)" $ testParse p "(\"foo\")" (S "foo"),
+    testCase "(true)" $ testParse p "(true)" (B True),
+    testCase "(false)" $ testParse p "(false)" (B False),
+    testCase "(bool)" $ testParseFail p "(bool)",
+    testCase "(int)" $ testParseFail p "(int)",
+    testCase "(void)" $ testParseFail p "(void)"
+  ]
+
+tests_unaryExpressionNotPlusMinus p =
+  [
+    testCase "not1" $ testParse p "!1" (Not (I 1)),
+    testCase "not2" $ testParse p "!true" (Not (B True)),
+    testCase "not3" $ testParse p "!true&&false" (Boolean "&&" (Not (B True)) (B False)),
+    testCase "cast1" $ testParse p "(bool) 1" (Cast "bool" (I 1)),
+    testCase "cast2" $ testParse p "(int) 1" (Cast "int"  (I 1)),
+    testCase "cast3" $ testParse p "(void) 1" (Cast "void"  (I 1)),
+    testCase "cast4" $ testParse p "(bool) -1" (Cast "bool" (Negative (I 1))),
+    testCase "cast5" $ testParse p "(int) -1" (Cast "int"  (Negative (I 1))),
+    testCase "cast6" $ testParse p "(void) -1" (Cast "void" (Negative (I 1))),
+    testCase "cast7" $ testParse p "(bool) !1" (Cast "bool" (Not (I 1))),
+    testCase "cast8" $ testParse p "(int) !1" (Cast "int"  (Not (I 1))),
+    testCase "cast9" $ testParse p "(void) !1" (Cast "void" (Not (I 1))),
+    testCase "cast10" $ testParse p "(bool) 1*1" (Cast "bool" (Multiplicative "*" (I 1) (I 1))),
+    testCase "cast11" $ testParse p "(int) 1*1" (Cast "int"  (Multiplicative "*" (I 1) (I 1))),
+    testCase "cast12" $ testParse p "(void) 1*1" (Cast "void" (Multiplicative "*" (I 1) (I 1))),
+    testCase "cast13" $ testParse p "(x) 1" (Cast "x" (I 1)),
+    testCase "cast13" $ testParse p "(x) (-1)" (Cast "x" (Negative (I 1))),
+    testCase "cast14" $ testParse p "(x) !1" (Cast "x"  (Not (I 1))),
+    testCase "cast15" $ testParse p "(x) y" (Cast "x" (Var "x")),
+    testCase "cast16" $ testParse p "(x) 1*1" (Cast "x" (Multiplicative "+" (I 1) (I 1))),
+    testCase "cast17" $ testParse p "(x) 1+1" (Cast "x" (Additive "+" (I 1) (I 1))),
+    testCase "cast18" $ testParse p "(x) 1+2*3" (Cast "x" (Additive "+" (I 1) (Multiplicative "*" (I 2) (I 3)))),
+    testCase "cast19" $ testParse p "(x) 2*3+1" (Cast "x" (Additive "+" (Multiplicative "*" (I 2) (I 3)) (I 1)))
+  ]
+
+tests_unaryExpression p =
+  [
+    testCase "negative1" $ testParse p "-1" (Negative (I 1))
   ]
 
 tests_multiplicativeExpression p =
   [
     testCase "mult1" $ testParse p "1*1" (Multiplicative "*" (I 1) (I 1)),
+    testCase "mult1.1" $ testParse p "-1*-1" (Multiplicative "*" (Negative (I 1)) (Negative (I 1))),
     testCase "mult2" $ testParse p "1/1" (Multiplicative "/" (I 1) (I 1)),
     testCase "mult3" $ testParse p "1*1*1" (Multiplicative "*" (Multiplicative "*" (I 1) (I 1)) (I 1)),
     testCase "mult4" $ testParse p "1/1/1" (Multiplicative "/" (Multiplicative "/" (I 1) (I 1)) (I 1)),
@@ -78,18 +122,24 @@ tests_multiplicativeExpression p =
     testCase "mult11" $ testParse p "1/(1/1)" (Multiplicative "/" (I 1) (Multiplicative "/" (I 1) (I 1))),
     testCase "mult12" $ testParse p "1*(1/1)" (Multiplicative "*" (I 1) (Multiplicative "/" (I 1) (I 1))),
     testCase "mult13" $ testParse p "1/(1*1)" (Multiplicative "/" (I 1) (Multiplicative "*" (I 1) (I 1))),
-    testCase "mult14" $ testParse p "(1/2)*(3/4)" (Multiplicative "*" (Multiplicative "/" (I 1) (I 2)) (Multiplicative "/" (I 3) (I 4)))
+    testCase "mult14" $ testParse p "(1/2)*(3/4)" (Multiplicative "*" (Multiplicative "/" (I 1) (I 2)) (Multiplicative "/" (I 3) (I 4))),
+    testCase "mult15" $ testParse p "(x)*1" (Multiplicative "*" (Var "x") (I 1)),
+    testCase "mult16" $ testParse p "(x)/1" (Multiplicative "/" (Var "x") (I 1))
   ]
 
 tests_additiveExpression p =
   [
     testCase "add1" $ testParse p "1+1" (Additive "+" (I 1) (I 1)),
+    testCase "add1.1" $ testParse p "-1+-1" (Additive "+" (Negative (I 1)) (Negative (I 1))),
     testCase "add2" $ testParse p "1-1" (Additive "-" (I 1) (I 1)),
+    testCase "add2.1" $ testParse p "-1- -1" (Additive "-" (Negative (I 1)) (Negative (I 1))),
     testCase "add3" $ testParse p "1+1+1" (Additive "+" (Additive "+" (I 1) (I 1)) (I 1)),
     testCase "add4" $ testParse p "1+2*3" (Additive "+" (I 1) (Multiplicative "*" (I 2) (I 3))),
     testCase "add5" $ testParse p "2*3+1" (Additive "+" (Multiplicative "*" (I 2) (I 3)) (I 1)),
     testCase "add6" $ testParse p "(1+2)*3" (Multiplicative "*" (Additive "+" (I 1) (I 2)) (I 3)),
-    testCase "add7" $ testParse p "3*(1+2)" (Multiplicative "*" (I 3) (Additive "+" (I 1) (I 2)))
+    testCase "add7" $ testParse p "3*(1+2)" (Multiplicative "*" (I 3) (Additive "+" (I 1) (I 2))),
+    testCase "add8" $ testParse p "(x)+1" (Additive "+" (Var "x") (I 1)),
+    testCase "add9" $ testParse p "(x)-1" (Additive "-" (Var "x") (I 1))
   ]
 
 tests_relationalExpression p =
