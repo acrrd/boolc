@@ -3,6 +3,7 @@ module Parser where
 import Ast
 
 import Control.Monad
+import Data.List
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as Token
@@ -86,7 +87,8 @@ parseUnaryExpressionNotPlusMinus :: Parser Expression
 parseUnaryExpressionNotPlusMinus = parsePostfixExpression
 
 parseUnaryExpression :: Parser Expression
-parseUnaryExpression = parseUnaryExpressionNotPlusMinus
+parseUnaryExpression = (reservedOp "-" >> liftM Negative (parseUnaryExpression))
+                       <|> parseUnaryExpressionNotPlusMinus
 
 parseMultiplicativeExpression :: Parser Expression
 parseMultiplicativeExpression =
