@@ -46,12 +46,29 @@ lexer = Token.makeTokenParser languageDef
 
 whiteSpace = Token.whiteSpace lexer
 reserved   = Token.reserved   lexer
-reservedOp = Token.reservedOp lexer
+--reservedOp = Token.reservedOp lexer
 parens     = Token.parens     lexer
 semi       = Token.semi       lexer
 identifier = Token.identifier lexer
 decimal    = Token.decimal    lexer
 stringLit  = Token.stringLiteral lexer
+
+reservedOpR :: String -> Parser String
+reservedOpR op = do currentop <- lookAhead oper                   
+                    let maxop = maximumValidOp currentop
+                    if maxop == op then symbol op else unexpected maxop
+  where oper = do{ c <- (opStart languageDef)
+                 ; cs <- many (opLetter languageDef)
+                 ; return (c:cs)
+                 }
+               <?> "operator"
+        maximumValidOp op = foldr (\x a -> if (elem x reservedOps) then x else a) "" $ subOps op
+        reservedOps = reservedOpNames languageDef
+        subOps op = (reverse $ (inits op) ++ [op])
+        symbol = Token.symbol lexer
+
+reservedOp :: String -> Parser ()
+reservedOp op = (Token.lexeme lexer $ reservedOpR op) >> return ()
 
 parseBinaryOp :: (String -> Expression -> Expression -> Expression) ->
                  [String] ->
