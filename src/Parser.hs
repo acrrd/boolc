@@ -52,13 +52,6 @@ identifier = Token.identifier lexer
 integer    = Token.integer    lexer
 string     = Token.stringLiteral lexer
 
-
-makeBinaryNode :: (Expression -> Expression -> Expression) ->
-                  Expression -> Expression -> Expression
-makeBinaryNode _ node Empty  = node
-makeBinaryNode _ Empty node = node
-makeBinaryNode parentNode node1 node2  = parentNode node1 node2
-
 parseBinaryOp :: (String -> Expression -> Expression -> Expression) ->
                  [String] ->
                  Parser (Expression -> Expression -> Expression)
@@ -69,7 +62,7 @@ parseBinaryExpression :: Parser Expression ->
                          [String] ->
                          Parser Expression
 parseBinaryExpression parseSubExp node ops = 
-  chainl parseSubExp (liftM makeBinaryNode (parseBinaryOp node ops)) Empty
+  chainl1 parseSubExp (parseBinaryOp node ops)
 
 parseLiteral :: Parser Expression
 parseLiteral = liftM I (liftM fromInteger integer)
