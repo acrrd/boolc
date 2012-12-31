@@ -100,9 +100,15 @@ parsePrimaryExpression = parseLiteral
 parsePostfixExpression :: Parser Expression
 parsePostfixExpression = parsePrimaryExpression
 
+parsePrimitiveTypes :: Parser TypeName
+parsePrimitiveTypes = 
+  choice $ map (\t -> reserved t >> (return t)) ["bool","int","void"]
+
 parseUnaryExpressionNotPlusMinus :: Parser Expression
 parseUnaryExpressionNotPlusMinus = 
   (reservedOp "!" >> liftM Not (parseUnaryExpression))
+  <|> liftM2 Cast (try $ parens parsePrimitiveTypes) parseUnaryExpression
+  <|> (try $ liftM2 Cast (parens identifier) parseUnaryExpressionNotPlusMinus)
   <|> parsePostfixExpression
 
 parseUnaryExpression :: Parser Expression
