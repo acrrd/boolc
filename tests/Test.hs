@@ -107,7 +107,6 @@ tests_unaryExpressionNotPlusMinus p =
   [
     testCase "not1" $ testParse p "!1" (Not (I 1)),
     testCase "not2" $ testParse p "!true" (Not (B True)),
-    testCase "not3" $ testParse p "!true&&false" (Boolean "&&" (Not (B True)) (B False)),
     testCase "cast1" $ testParse p "(bool) 1" (Cast "bool" (I 1)),
     testCase "cast2" $ testParse p "(int) 1" (Cast "int"  (I 1)),
     testCase "cast3" $ testParse p "(void) 1" (Cast "void"  (I 1)),
@@ -117,17 +116,17 @@ tests_unaryExpressionNotPlusMinus p =
     testCase "cast7" $ testParse p "(bool) !1" (Cast "bool" (Not (I 1))),
     testCase "cast8" $ testParse p "(int) !1" (Cast "int"  (Not (I 1))),
     testCase "cast9" $ testParse p "(void) !1" (Cast "void" (Not (I 1))),
-    testCase "cast10" $ testParse p "(bool) 1*1" (Cast "bool" (Multiplicative "*" (I 1) (I 1))),
-    testCase "cast11" $ testParse p "(int) 1*1" (Cast "int"  (Multiplicative "*" (I 1) (I 1))),
-    testCase "cast12" $ testParse p "(void) 1*1" (Cast "void" (Multiplicative "*" (I 1) (I 1))),
+    testCase "cast10" $ testParse p "(bool) 1*1" (Multiplicative "*" (Cast "bool" (I 1)) (I 1)),
+    testCase "cast11" $ testParse p "(int) 1*1" (Multiplicative "*" (Cast "int" (I 1)) (I 1)),
+    testCase "cast12" $ testParse p "(void) 1*1" (Multiplicative "*" (Cast "void" (I 1)) (I 1)),
     testCase "cast13" $ testParse p "(x) 1" (Cast "x" (I 1)),
     testCase "cast13" $ testParse p "(x) (-1)" (Cast "x" (Negative (I 1))),
     testCase "cast14" $ testParse p "(x) !1" (Cast "x"  (Not (I 1))),
-    testCase "cast15" $ testParse p "(x) y" (Cast "x" (Var "x")),
-    testCase "cast16" $ testParse p "(x) 1*1" (Cast "x" (Multiplicative "+" (I 1) (I 1))),
-    testCase "cast17" $ testParse p "(x) 1+1" (Cast "x" (Additive "+" (I 1) (I 1))),
-    testCase "cast18" $ testParse p "(x) 1+2*3" (Cast "x" (Additive "+" (I 1) (Multiplicative "*" (I 2) (I 3)))),
-    testCase "cast19" $ testParse p "(x) 2*3+1" (Cast "x" (Additive "+" (Multiplicative "*" (I 2) (I 3)) (I 1)))
+    testCase "cast15" $ testParse p "(x) y" (Cast "x" (Var "y")),
+    testCase "cast16" $ testParse p "(x) 1*1" (Multiplicative "*" (Cast "x" (I 1)) (I 1)),
+    testCase "cast17" $ testParse p "(x) 1+1" (Additive "+" (Cast "x" (I 1)) (I 1)),
+    testCase "cast18" $ testParse p "(x) 1+2*3" (Additive "+" (Cast "x" (I 1)) (Multiplicative "*" (I 2) (I 3))),
+    testCase "cast19" $ testParse p "(x) 2*3+1" (Additive "+" (Multiplicative "*" (Cast "x" (I 2)) (I 3)) (I 1))
   ]
 
 tests_unaryExpression p =
