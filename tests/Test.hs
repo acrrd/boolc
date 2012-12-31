@@ -16,17 +16,17 @@ tests =
   [
     testGroup "Parser" [
        testGroup "ReservedOp" $ tests_reservedOp,
-       testGroup "Literal" $ tests_literal parseLiteral,
-       testGroup "Variable" $ tests_variable parseVariable,
-       testGroup "PrimaryExpression" $ tests_primaryExpression parsePrimaryExpression,
-       testGroup "UnaryExpressionNotPlusMinus" $ tests_unaryExpressionNotPlusMinus parseUnaryExpressionNotPlusMinus,
-       testGroup "UnaryExpression" $ tests_unaryExpression parseUnaryExpression,
-       testGroup "MultiplicativeExpression" $ tests_multiplicativeExpression parseMultiplicativeExpression,
-       testGroup "AdditiveExpression" $ tests_additiveExpression parseAdditiveExpression,
-       testGroup "RelationalExpression" $ tests_relationalExpression parseRelationalExpression,
-       testGroup "EqualitylExpression" $ tests_equalityExpression parseEqualityExpression,
-       testGroup "BooleanAndExpression" $ tests_booleanAndExpression parseBooleanAndExpression,
-       testGroup "BooleanOrExpression" $ tests_booleanOrExpression parseBooleanOrExpression
+       testGroup "Literal" $ tests_literal parseExpression,
+       testGroup "Variable" $ tests_variable parseExpression,
+       testGroup "PrimaryExpression" $ tests_primaryExpression parseExpression,
+       testGroup "UnaryExpressionNotPlusMinus" $ tests_unaryExpressionNotPlusMinus parseExpression,
+       testGroup "UnaryExpression" $ tests_unaryExpression parseExpression,
+       testGroup "MultiplicativeExpression" $ tests_multiplicativeExpression parseExpression,
+       testGroup "AdditiveExpression" $ tests_additiveExpression parseExpression,
+       testGroup "RelationalExpression" $ tests_relationalExpression parseExpression,
+       testGroup "EqualitylExpression" $ tests_equalityExpression parseExpression,
+       testGroup "BooleanAndExpression" $ tests_booleanAndExpression parseExpression,
+       testGroup "BooleanOrExpression" $ tests_booleanOrExpression parseExpression
        ]
   ]
 
