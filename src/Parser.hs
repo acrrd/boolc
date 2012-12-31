@@ -101,7 +101,9 @@ parsePostfixExpression :: Parser Expression
 parsePostfixExpression = parsePrimaryExpression
 
 parseUnaryExpressionNotPlusMinus :: Parser Expression
-parseUnaryExpressionNotPlusMinus = parsePostfixExpression
+parseUnaryExpressionNotPlusMinus = 
+  (reservedOp "!" >> liftM Not (parseUnaryExpression))
+  <|> parsePostfixExpression
 
 parseUnaryExpression :: Parser Expression
 parseUnaryExpression = (reservedOp "-" >> liftM Negative (parseUnaryExpression))
