@@ -15,6 +15,7 @@ main = defaultMain tests
 tests = 
   [
     testGroup "Parser" [
+       testGroup "ReservedOp" $ tests_reservedOp,
        testGroup "Literal" $ tests_literal parseLiteral,
        testGroup "Variable" $ tests_variable parseVariable,
        testGroup "PrimaryExpression" $ tests_primaryExpression parsePrimaryExpression,
@@ -29,20 +30,48 @@ tests =
        ]
   ]
 
-runParse :: Parser Expression -> String -> Either ParseError Expression
+runParse :: Parser a -> String -> Either ParseError a
 runParse parser string = parse parser "" string
 
-testParse :: Parser Expression -> String -> Expression -> Assertion
+testParse :: (Eq a, Show a) => Parser a -> String -> a -> Assertion
 testParse p s e =
-  case (runParse p s) of
+  case (runParse par s) of
     Left err  -> assertFailure $ show err
     Right v  -> v @?= e
+  where par = do r <- p
+                 eof
+                 return r
 
-testParseFail :: Parser Expression -> String -> Assertion
+testParseFail :: Show a => Parser a -> String -> Assertion
 testParseFail p s =   case (parse p "" s) of
     Left err  -> assertBool "" True
     Right v  -> assertFailure $ "This test should fail but got: " ++ show v
 
+tests_reservedOp  =
+  [
+    testCase "resOp1" $ testParse (reservedOpR "+") "+" "+",
+    testCase "resOp2" $ testParse (reservedOpR "-") "-" "-",
+    testCase "resOp3" $ testParse (reservedOpR "*") "*" "*",
+    testCase "resOp4" $ testParse (reservedOpR "/") "/" "/",
+    testCase "resOp5" $ testParse (reservedOpR "!") "!" "!",
+    testCase "resOp6" $ testParse (reservedOpR "<") "<" "<",
+    testCase "resOp7" $ testParse (reservedOpR ">") ">" ">",
+    testCase "resOp8" $ testParse (reservedOpR "<=") "<=" "<=",
+    testCase "resOp9" $ testParse (reservedOpR ">=") ">=" ">=",
+    testCase "resOp10" $ testParse (reservedOpR "==") "==" "==",
+    testCase "resOp11" $ testParse (reservedOpR "&&") "&&" "&&",
+    testCase "resOp12" $ testParse (reservedOpR "||") "||" "||",
+    testCase "resOp13" $ testParseFail (reservedOpR "<") "<=",
+    testCase "resOp14" $ testParseFail (reservedOpR ">") ">=",
+    testCase "resOp15" $ testParseFail (reservedOpR "=") "==",
+    testCase "resOp16" $ testParseFail (reservedOpR "!") "!=",
+    testCase "resOp17" $ testParseFail (reservedOpR "|") "||",
+    testCase "resOp18" $ testParseFail (reservedOpR "&") "&&",
+    testCase "resOp19" $ testParse (reservedOpR "+" >> reservedOpR "-") "+-" "-",
+    testCase "resOp20" $ testParse (reservedOpR "-" >> reservedOpR "-") "--" "-",
+    testCase "resOp21" $ testParse (reservedOpR "*" >> reservedOpR "-") "*-" "-",
+    testCase "resOp22" $ testParse (reservedOpR "/" >> reservedOpR "-") "/-" "-"
+  ]
 
 tests_literal p = 
   [
@@ -132,7 +161,7 @@ tests_additiveExpression p =
     testCase "add1" $ testParse p "1+1" (Additive "+" (I 1) (I 1)),
     testCase "add1.1" $ testParse p "-1+-1" (Additive "+" (Negative (I 1)) (Negative (I 1))),
     testCase "add2" $ testParse p "1-1" (Additive "-" (I 1) (I 1)),
-    testCase "add2.1" $ testParse p "-1- -1" (Additive "-" (Negative (I 1)) (Negative (I 1))),
+    testCase "add2.1" $ testParse p "-1--1" (Additive "-" (Negative (I 1)) (Negative (I 1))),
     testCase "add3" $ testParse p "1+1+1" (Additive "+" (Additive "+" (I 1) (I 1)) (I 1)),
     testCase "add4" $ testParse p "1+2*3" (Additive "+" (I 1) (Multiplicative "*" (I 2) (I 3))),
     testCase "add5" $ testParse p "2*3+1" (Additive "+" (Multiplicative "*" (I 2) (I 3)) (I 1)),
