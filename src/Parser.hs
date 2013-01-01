@@ -50,7 +50,7 @@ reserved   = Token.reserved   lexer
 parens     = Token.parens     lexer
 semi       = Token.semi       lexer
 identifier = Token.identifier lexer
-decimal    = Token.decimal    lexer
+natural    = Token.natural    lexer
 stringLit  = Token.stringLiteral lexer
 
 reservedOpR :: String -> Parser String
@@ -68,7 +68,8 @@ reservedOpR op = do currentop <- lookAhead oper
         symbol = Token.symbol lexer
 
 reservedOp :: String -> Parser ()
-reservedOp op = (Token.lexeme lexer $ reservedOpR op) >> return ()
+--reservedOp op = (Token.lexeme lexer $ reservedOpR op) >> return ()
+reservedOp op = reservedOpR op >> return ()
 
 parseBinaryOp :: (String -> Expression -> Expression -> Expression) ->
                  [String] ->
@@ -83,7 +84,7 @@ parseBinaryExpression parseSubExp node ops =
   chainl1 parseSubExp (parseBinaryOp node ops)
 
 parseLiteral :: Parser Expression
-parseLiteral = liftM I (liftM fromInteger decimal)
+parseLiteral = liftM I (liftM fromInteger natural)
                 <|> liftM S stringLit
                 <|> (reserved "true" >> (return $ B True))
                 <|> (reserved "false" >> (return $ B False))
