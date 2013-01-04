@@ -52,6 +52,8 @@ semi       = Token.semi       lexer
 identifier = Token.identifier lexer
 natural    = Token.natural    lexer
 stringLit  = Token.stringLiteral lexer
+commaSep  = Token.commaSep lexer
+dot  = Token.dot lexer
 
 reservedOpR :: String -> Parser String
 reservedOpR op = do currentop <- lookAhead oper                   
@@ -99,7 +101,10 @@ parsePrimaryExpression = parseLiteral
                          <|> parens parseExpression
 
 parsePostfixExpression :: Parser Expression
-parsePostfixExpression = parsePrimaryExpression
+parsePostfixExpression =  liftM2 (foldl (flip ($))) parsePrimaryExpression parseMembersAccess
+  where parseMembersAccess = (dot >> sepBy1 parseMemberAccess dot) <|> return []
+        parseMemberAccess = do id <- identifier
+                               option (FieldAccess id) $ liftM (MethodCall id) (parens $ commaSep parseExpression)
 
 parsePrimitiveTypes :: Parser TypeName
 parsePrimitiveTypes = 
