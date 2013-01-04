@@ -107,7 +107,11 @@ tests_primaryExpression p =
     testCase "(false)" $ testParse p "(false)" (B False),
     testCase "(bool)" $ testParseFail p "(bool)",
     testCase "(int)" $ testParseFail p "(int)",
-    testCase "(void)" $ testParseFail p "(void)"
+    testCase "(void)" $ testParseFail p "(void)",
+    testCase "constr1" $ testParse p "new x()" (New "x" []),
+    testCase "constr2" $ testParse p "new x(1)" (New "x" [I 1]),
+    testCase "constr3" $ testParse p "new x(1,2)" (New "x" [I 1,I 2]),
+    testCase "constr4" $ testParseFail p "new x"
   ]
 
 tests_postfixExpression p =
