@@ -109,6 +109,17 @@ tests_primaryExpression p =
     testCase "(void)" $ testParseFail p "(void)"
   ]
 
+tests_postfixExpression p =
+  [
+    testCase "field1" $ testParse p "x.f" (FieldAccess "f" (Var "x")),
+    testCase "field2" $ testParse p "x.f.g" (FieldAccess "g" (FieldAccess "f" (Var "x"))),
+    testCase "field3" $ testParse p "x.f.g()" (MethodCall "g" [] (FieldAccess "f" (Var "x"))),
+    testCase "method1" $ testParse p "x.m()" (MethodCall "m" [] (Var "x")),
+    testCase "method1" $ testParse p "x.m().n()"(MethodCall "n" [] (MethodCall "m" [] (Var "x"))),
+    testCase "method2" $ testParse p "x.m(1)" (MethodCall "m" [I 1] (Var "x")),
+    testCase "method3" $ testParse p "x.m(1,2)" (MethodCall "m" [(I 1),(I 2)] (Var "x"))
+  ]
+
 tests_unaryExpressionNotPlusMinus p =
   [
     testCase "not1" $ testParse p "!1" (Not (I 1)),
