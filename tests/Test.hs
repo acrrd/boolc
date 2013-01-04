@@ -76,15 +76,21 @@ tests_reservedOp  =
 tests_literal p = 
   [
     testCase "integer" $ testParse p "123" (I 123),
+    testCase "integer.1" $ testParse p "123 " (I 123),
     testCase "string" $ testParse p "\"foo\"" (S "foo"),
+    testCase "string.1" $ testParse p "\"foo\" " (S "foo"),
     testCase "true" $ testParse p "true" (B True),
-    testCase "false" $ testParse p "false" (B False)
+    testCase "true.1" $ testParse p "true " (B True),
+    testCase "false" $ testParse p "false" (B False),
+    testCase "false.1" $ testParse p "false " (B False)
   ]
 
 tests_variable p =  
   [
     testCase "variable" $ testParse p "x" (Var "x"),
-    testCase "this" $ testParse p "this" (Var "this")
+    testCase "variable.1" $ testParse p "x " (Var "x"),
+    testCase "this" $ testParse p "this" (Var "this"),
+    testCase "this.1" $ testParse p "this " (Var "this")
   ]
 
 tests_primaryExpression p = 
@@ -137,22 +143,39 @@ tests_unaryExpression p =
 tests_multiplicativeExpression p =
   [
     testCase "mult1" $ testParse p "1*1" (Multiplicative "*" (I 1) (I 1)),
+    testCase "mult1.0" $ testParse p "1 * 1 " (Multiplicative "*" (I 1) (I 1)),
     testCase "mult1.1" $ testParse p "-1*-1" (Multiplicative "*" (Negative (I 1)) (Negative (I 1))),
+    testCase "mult1.2" $ testParse p "- 1 * - 1 " (Multiplicative "*" (Negative (I 1)) (Negative (I 1))),
     testCase "mult2" $ testParse p "1/1" (Multiplicative "/" (I 1) (I 1)),
+    testCase "mult2.1" $ testParse p "1 / 1 " (Multiplicative "/" (I 1) (I 1)),
     testCase "mult3" $ testParse p "1*1*1" (Multiplicative "*" (Multiplicative "*" (I 1) (I 1)) (I 1)),
+    testCase "mult3.1" $ testParse p "1 * 1 * 1 " (Multiplicative "*" (Multiplicative "*" (I 1) (I 1)) (I 1)),
     testCase "mult4" $ testParse p "1/1/1" (Multiplicative "/" (Multiplicative "/" (I 1) (I 1)) (I 1)),
+    testCase "mult4.1" $ testParse p "1 / 1 / 1 " (Multiplicative "/" (Multiplicative "/" (I 1) (I 1)) (I 1)),
     testCase "mult5" $ testParse p "1*1/1" (Multiplicative "/" (Multiplicative "*" (I 1) (I 1)) (I 1)),
+    testCase "mult5.1" $ testParse p "1 * 1 / 1 " (Multiplicative "/" (Multiplicative "*" (I 1) (I 1)) (I 1)),
     testCase "mult6" $ testParse p "1/1*1" (Multiplicative "*" (Multiplicative "/" (I 1) (I 1)) (I 1)),
+    testCase "mult6.1" $ testParse p "1 / 1 * 1 " (Multiplicative "*" (Multiplicative "/" (I 1) (I 1)) (I 1)),
     testCase "mult7" $ testParse p "1/2*3/4" (Multiplicative "/" (Multiplicative "*" (Multiplicative "/" (I 1) (I 2)) (I 3)) (I 4)),
+    testCase "mult7.1" $ testParse p "1 / 2 * 3 / 4 " (Multiplicative "/" (Multiplicative "*" (Multiplicative "/" (I 1) (I 2)) (I 3)) (I 4)),
     testCase "mult8" $ testParse p "(1*1)" (Multiplicative "*" (I 1) (I 1)),
+    testCase "mult8.1" $ testParse p "( 1 * 1 ) " (Multiplicative "*" (I 1) (I 1)),
     testCase "mult9" $ testParse p "(1/1)" (Multiplicative "/" (I 1) (I 1)),
+    testCase "mult9.1" $ testParse p "( 1 / 1 ) " (Multiplicative "/" (I 1) (I 1)),
     testCase "mult10" $ testParse p "1*(1*1)" (Multiplicative "*" (I 1) (Multiplicative "*" (I 1) (I 1))),
+    testCase "mult10.1" $ testParse p "1 * ( 1 * 1 )" (Multiplicative "*" (I 1) (Multiplicative "*" (I 1) (I 1))),
     testCase "mult11" $ testParse p "1/(1/1)" (Multiplicative "/" (I 1) (Multiplicative "/" (I 1) (I 1))),
+    testCase "mult11.1" $ testParse p "1 / ( 1 / 1 ) " (Multiplicative "/" (I 1) (Multiplicative "/" (I 1) (I 1))),
     testCase "mult12" $ testParse p "1*(1/1)" (Multiplicative "*" (I 1) (Multiplicative "/" (I 1) (I 1))),
+    testCase "mult12.1" $ testParse p "1 * ( 1 / 1 ) " (Multiplicative "*" (I 1) (Multiplicative "/" (I 1) (I 1))),
     testCase "mult13" $ testParse p "1/(1*1)" (Multiplicative "/" (I 1) (Multiplicative "*" (I 1) (I 1))),
+    testCase "mult13.1" $ testParse p "1 / ( 1 * 1 ) " (Multiplicative "/" (I 1) (Multiplicative "*" (I 1) (I 1))),
     testCase "mult14" $ testParse p "(1/2)*(3/4)" (Multiplicative "*" (Multiplicative "/" (I 1) (I 2)) (Multiplicative "/" (I 3) (I 4))),
+    testCase "mult14.1" $ testParse p "( 1 / 2 ) * ( 3 / 4 ) " (Multiplicative "*" (Multiplicative "/" (I 1) (I 2)) (Multiplicative "/" (I 3) (I 4))),
     testCase "mult15" $ testParse p "(x)*1" (Multiplicative "*" (Var "x") (I 1)),
-    testCase "mult16" $ testParse p "(x)/1" (Multiplicative "/" (Var "x") (I 1))
+    testCase "mult15.1" $ testParse p "( x ) * 1 " (Multiplicative "*" (Var "x") (I 1)),
+    testCase "mult16" $ testParse p "(x)/1" (Multiplicative "/" (Var "x") (I 1)),
+    testCase "mult16.1" $ testParse p "( x ) / 1 " (Multiplicative "/" (Var "x") (I 1))
   ]
 
 tests_additiveExpression p =
