@@ -19,6 +19,7 @@ tests =
        testGroup "Literal" $ tests_literal parseExpression,
        testGroup "Variable" $ tests_variable parseExpression,
        testGroup "PrimaryExpression" $ tests_primaryExpression parseExpression,
+       testGroup "PostfixExpression" $ tests_postfixExpression parseExpression,
        testGroup "UnaryExpressionNotPlusMinus" $ tests_unaryExpressionNotPlusMinus parseExpression,
        testGroup "UnaryExpression" $ tests_unaryExpression parseExpression,
        testGroup "MultiplicativeExpression" $ tests_multiplicativeExpression parseExpression,
