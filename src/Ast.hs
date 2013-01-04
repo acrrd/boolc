@@ -15,4 +15,5 @@ data Expression = I Int | B Bool | S String | Var String | Empty
                   | Cast TypeName Expression
                   | FieldAccess FieldName Expression
                   | MethodCall MethodName [Expression] Expression
+                  | New TypeName [Expression]
                   deriving(Show,Eq)
