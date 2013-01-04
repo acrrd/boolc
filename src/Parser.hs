@@ -99,6 +99,7 @@ parsePrimaryExpression :: Parser Expression
 parsePrimaryExpression = parseLiteral
                          <|> parseVariable
                          <|> parens parseExpression
+                         <|> (reserved "new" >> (liftM2 New identifier $ parens $ commaSep parseExpression))
 
 parsePostfixExpression :: Parser Expression
 parsePostfixExpression =  liftM2 (foldl (flip ($))) parsePrimaryExpression parseMembersAccess
