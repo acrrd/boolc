@@ -4,7 +4,7 @@ type Operation = String
 type TypeName = String
 type FieldName = String
 type MethodName = String
-data Expression = I Int | B Bool | S String | Var String | Empty
+data Expression = I Int | B Bool | S String | Var String | Null
                   | Additive Operation Expression Expression
                   | Multiplicative Operation Expression Expression
                   | Relational Operation Expression Expression
