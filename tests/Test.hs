@@ -317,3 +317,11 @@ tests_returnStatement p =
     testCase "return1" $ testParse p "return;" (Return Void),
     testCase "retirn2" $ testParse p "return 1;" (Return (I 1))
   ]
+
+tests_blockStatement p =
+  [
+    testCase "block1" $ testParse p "{}" (Block []),
+    testCase "block2" $ testParse p "{;;;}" (Block [NoOp,NoOp,NoOp]),
+    testCase "block3" $ testParse p "{1;}" (Block [(ExpStm (I 1))]),
+    testCase "block4" $ testParse p "{1;1;}" (Block [(ExpStm (I 1)),(ExpStm (I 1))])
+  ]
