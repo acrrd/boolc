@@ -17,3 +17,12 @@ data Expression = I Int | B Bool | S String | Var String | Null
                   | MethodCall MethodName [Expression] Expression
                   | New TypeName [Expression]
                   deriving(Show,Eq)
+
+data Statement = NoOp 
+               | Declaration Typename String
+               | ExpStm Expression
+               | Assign Expression Expression
+               | If Expression Statement Statement
+               | While Expression Statement
+               | Return Expression
+               deriving(Show,Eq)
