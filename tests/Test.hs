@@ -83,7 +83,9 @@ tests_literal p =
     testCase "true" $ testParse p "true" (B True),
     testCase "true.1" $ testParse p "true " (B True),
     testCase "false" $ testParse p "false" (B False),
-    testCase "false.1" $ testParse p "false " (B False)
+    testCase "false.1" $ testParse p "false " (B False),
+    testCase "null" $ testParse p "null" (Null),
+    testCase "null.1" $ testParse p "null " (Null)
   ]
 
 tests_variable p =  
