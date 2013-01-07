@@ -54,6 +54,7 @@ natural    = Token.natural    lexer
 stringLit  = Token.stringLiteral lexer
 commaSep  = Token.commaSep lexer
 dot  = Token.dot lexer
+operator  = Token.operator lexer
 
 reservedOpR :: String -> Parser String
 reservedOpR op = do currentop <- lookAhead oper                   
@@ -149,3 +150,6 @@ parseBooleanOrExpression =
 
 parseExpression :: Parser Expression
 parseExpression = parseBooleanOrExpression
+
+parseStatement :: Parser Statement
+parseStatement = return NoOp
