@@ -29,10 +29,18 @@ tests =
           testGroup "EqualitylExpression" $ tests_equalityExpression parseExpression,
           testGroup "BooleanAndExpression" $ tests_booleanAndExpression parseExpression,
           testGroup "BooleanOrExpression" $ tests_booleanOrExpression parseExpression
+          ],
+       testGroup "Statement" [
+          testGroup "NoOp" $ tests_noOpStatement parseStatement,
+          testGroup "Declaration" $ tests_declarationStatement parseStatement,
+          testGroup "ExpStm" $ tests_expStmStatement parseStatement,
+          testGroup "Assign" $ tests_assignStatement parseStatement,
+          testGroup "If" $ tests_ifStatement parseStatement,
+          testGroup "While" $ tests_whileStatement parseStatement
           ]
        ]
   ]
-
+  
 runParse :: Parser a -> String -> Either ParseError a
 runParse parser string = parse parser "" string
 
@@ -255,3 +263,57 @@ tests_booleanOrExpression p =
     testCase "boolor5" $ testParse p "3&&(1||2)" (Boolean "&&" (I 3) (Boolean "||" (I 1) (I 2)))
   ]
 
+tests_noOpStatement p =
+  [
+    testCase "noOp1" $ testParse p ";" NoOp,
+    testCase "noOp" $ testParse p ";" NoOp
+  ]
+
+tests_declarationStatement p =
+  [
+    testCase "declaration1" $ testParse p "t x;" (Declaration "t" "x"),
+    testCase "declaration2" $ testParse p "t x ; " (Declaration "t" "x"),
+    testCase "declaration3" $ testParseFail p "t x"
+  ]
+
+tests_expStmStatement p =
+  [
+    testCase "expStm1" $ testParse p "1;" (ExpStm (I 1)),
+    testCase "expStm2" $ testParse p "1 ; " (ExpStm (I 1)),
+    testCase "expStm3" $ testParse p "(bool) 1;" (ExpStm (Cast "bool" (I 1))),
+    testCase "expStm4" $ testParseFail p "1"
+  ]
+
+tests_assignStatement p =
+  [
+    testCase "assign1" $ testParse p "a=1;" (Assign (Var "a") (I 1)),
+    testCase "assign2" $ testParse p "a = 1 ; " (Assign (Var "a") (I 1)),
+    testCase "assign3" $ testParse p "e.f= x;" (Assign (FieldAccess "f" (Var "e")) (Var "x")),
+    testCase "assign4" $ testParseFail p "a=1"
+  ]
+
+tests_ifStatement p =
+  [
+    testCase "if1" $ testParse p "if(1);" (If (I 1) NoOp NoOp),
+    testCase "if2" $ testParse p "if(1);else;" (If (I 1) NoOp NoOp),
+    testCase "if3" $ testParse p "if ( 1 ) ; else ; " (If (I 1) NoOp NoOp),
+    testCase "if4" $ testParse p "if(1) 1;" (If (I 1) (ExpStm (I 1)) NoOp),
+    testCase "if5" $ testParse p "if(1) 1;else 1;" (If (I 1) (ExpStm (I 1)) (ExpStm (I 1))),
+    testCase "if6" $ testParse p "if(1){};else{};" (If (I 1) NoOp NoOp),
+    testCase "if7" $ testParse p "if(1){1;};else{1;};" (If (I 1) (ExpStm (I 1)) (ExpStm (I 1))),
+    testCase "if8" $ testParse p "if(1)if(1);else 1;" (If (I 1) (If (I 1) NoOp (ExpStm (I 1))) NoOp),
+    testCase "if9" $ testParse p "if(1){if(1);}else 1;" (If (I 1) (If (I 1) NoOp NoOp) (ExpStm (I 1)))
+  ]
+
+tests_whileStatement p =
+  [
+    testCase "while1" $ testParse p "while(1);" (While (I 1) NoOp),
+    testCase "while2" $ testParse p "while(1) 1;" (While (I 1) (ExpStm (I 1))),
+    testCase "while3" $ testParse p "while(1){1;}" (While (I 1) (ExpStm (I 1)))
+  ]
+
+tests_returnStatement p =
+  [
+    testCase "return1" $ testParse p "return;" (Return Void),
+    testCase "retirn2" $ testParse p "return 1;" (Return (I 1))
+  ]
