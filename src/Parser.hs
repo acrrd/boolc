@@ -90,6 +90,7 @@ parseLiteral = liftM I (liftM fromInteger natural)
                 <|> liftM S stringLit
                 <|> (reserved "true" >> (return $ B True))
                 <|> (reserved "false" >> (return $ B False))
+                <|> (reserved "null" >> (return $ Null))
 
 parseVariable :: Parser Expression
 parseVariable = (reserved "this" >> (return $ Var "this"))
