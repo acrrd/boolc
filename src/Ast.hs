@@ -26,4 +26,5 @@ data Statement = NoOp
                | If Expression Statement Statement
                | While Expression Statement
                | Return Expression
+               | Block [Statement]
                deriving(Show,Eq)
