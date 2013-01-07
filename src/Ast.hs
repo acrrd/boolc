@@ -19,7 +19,7 @@ data Expression = I Int | B Bool | S String | Var String | Null
                   deriving(Show,Eq)
 
 data Statement = NoOp 
-               | Declaration Typename String
+               | Declaration TypeName String
                | ExpStm Expression
                | Assign Expression Expression
                | If Expression Statement Statement
