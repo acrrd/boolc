@@ -1,10 +1,11 @@
 module Ast where
 
 type Operation = String
+type VarName = String
 type TypeName = String
 type FieldName = String
 type MethodName = String
-data Expression = I Int | B Bool | S String | Var String 
+data Expression = I Int | B Bool | S String | Var VarName
                   | Null | Void
                   | Additive Operation Expression Expression
                   | Multiplicative Operation Expression Expression
@@ -20,7 +21,7 @@ data Expression = I Int | B Bool | S String | Var String
                   deriving(Show,Eq)
 
 data Statement = NoOp 
-               | Declaration TypeName String
+               | Declaration TypeName VarName
                | ExpStm Expression
                | Assign Expression Expression
                | If Expression Statement Statement
