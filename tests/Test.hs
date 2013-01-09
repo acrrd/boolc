@@ -36,7 +36,9 @@ tests =
           testGroup "ExpStm" $ tests_expStmStatement parseStatement,
           testGroup "Assign" $ tests_assignStatement parseStatement,
           testGroup "If" $ tests_ifStatement parseStatement,
-          testGroup "While" $ tests_whileStatement parseStatement
+          testGroup "While" $ tests_whileStatement parseStatement,
+          testGroup "Return" $ tests_whileStatement parseStatement,
+          testGroup "Block" $ tests_whileStatement parseStatement
           ]
        ]
   ]
@@ -299,17 +301,17 @@ tests_ifStatement p =
     testCase "if3" $ testParse p "if ( 1 ) ; else ; " (If (I 1) NoOp NoOp),
     testCase "if4" $ testParse p "if(1) 1;" (If (I 1) (ExpStm (I 1)) NoOp),
     testCase "if5" $ testParse p "if(1) 1;else 1;" (If (I 1) (ExpStm (I 1)) (ExpStm (I 1))),
-    testCase "if6" $ testParse p "if(1){};else{};" (If (I 1) NoOp NoOp),
-    testCase "if7" $ testParse p "if(1){1;};else{1;};" (If (I 1) (ExpStm (I 1)) (ExpStm (I 1))),
+    testCase "if6" $ testParse p "if(1){}else{}" (If (I 1) (Block []) (Block [])),
+    testCase "if7" $ testParse p "if(1){1;}else{1;}" (If (I 1) (Block[ExpStm (I 1)]) (Block [ExpStm (I 1)])),
     testCase "if8" $ testParse p "if(1)if(1);else 1;" (If (I 1) (If (I 1) NoOp (ExpStm (I 1))) NoOp),
-    testCase "if9" $ testParse p "if(1){if(1);}else 1;" (If (I 1) (If (I 1) NoOp NoOp) (ExpStm (I 1)))
+    testCase "if9" $ testParse p "if(1){if(1);}else 1;" (If (I 1) (Block [If (I 1) NoOp NoOp]) (ExpStm (I 1)))
   ]
 
 tests_whileStatement p =
   [
     testCase "while1" $ testParse p "while(1);" (While (I 1) NoOp),
     testCase "while2" $ testParse p "while(1) 1;" (While (I 1) (ExpStm (I 1))),
-    testCase "while3" $ testParse p "while(1){1;}" (While (I 1) (ExpStm (I 1)))
+    testCase "while3" $ testParse p "while(1){1;}" (While (I 1) (Block [ExpStm (I 1)]))
   ]
 
 tests_returnStatement p =
