@@ -198,14 +198,23 @@ parseReturnStatement = liftM Return parseExpression
 parseBlockStatement :: Parser Statement
 parseBlockStatement = liftM Block $ braces $ many parseStatement
 
+-- Reuse declaration parser
 parseFieldDecl :: Parser MemberDecl
-parseFieldDecl = return $ FieldDecl "" ""
+parseFieldDecl = do d <- parseDeclarationStatement
+                    let (Declaration t v) = d
+                    return $ FieldDecl t v
 
 parseMethodDecl :: Parser MemberDecl
-parseMethodDecl = return $ MethodDecl "" "" [] NoOp
+parseMethodDecl = liftM4 MethodDecl identifier identifier parseParameterDecl parseBody
+  where parseParameterDecl = parens $ commaSep $ liftM2 (,) identifier identifier
+        parseBody = parseBlockStatement
 
 parseClassDecl :: Parser ClassDecl
-parseClassDecl = return $ ClassDecl "" "" []
+parseClassDecl = liftM3 ClassDecl parseClassName parseExtends parseClassBody
+  where parseClassName = reserved "class" >> identifier
+        parseExtends = option "" (reserved "extends" >> identifier)
+        parseClassBody = braces $ many $ (try parseFieldDecl <|> parseMethodDecl)
 
 parseProgram :: Parser Program
-parseProgram = return []
+parseProgram = many parseClassDecl
+
