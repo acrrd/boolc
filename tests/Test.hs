@@ -39,7 +39,13 @@ tests =
           testGroup "While" $ tests_whileStatement parseStatement,
           testGroup "Return" $ tests_whileStatement parseStatement,
           testGroup "Block" $ tests_whileStatement parseStatement
-          ]
+          ],
+       testGroup "Declaration" [
+         testGroup "FieldDecl" $ tests_fieldDecl  parseFieldDecl,
+         testGroup "MethodDecl" $ tests_methodDecl parseMethodDecl,
+         testGroup "ClassDecl" $ tests_classDecl parseClassDecl,
+         testGroup "ProgramDecl" $ tests_program parseProgram
+         ]
        ]
   ]
   
@@ -326,4 +332,58 @@ tests_blockStatement p =
     testCase "block2" $ testParse p "{;;;}" (Block [NoOp,NoOp,NoOp]),
     testCase "block3" $ testParse p "{1;}" (Block [(ExpStm (I 1))]),
     testCase "block4" $ testParse p "{1;1;}" (Block [(ExpStm (I 1)),(ExpStm (I 1))])
+  ]
+
+tests_fieldDecl p =
+  [
+    testCase "fieldDecl1" $ testParse p "t x;" (FieldDecl "t" "x"),
+    testCase "fieldDecl2" $ testParse p "t x ; " (FieldDecl "t" "x"),
+    testCase "fieldDecl3" $ testParseFail p "t x"
+  ]
+
+tests_methodDecl p =
+  [
+    testCase "methodDecl1" $ testParse p "t m(){}" (MethodDecl "t" "m" [] (Block [])),
+    testCase "methodDecl2" $ testParse p "t m(t x){}" (MethodDecl "t" "x" [("t","x")] (Block [])),
+    testCase "methodDecl3" $ testParse p "t m(t x,u y){}" (MethodDecl "t" "x" [("t","x"),("u","y")] (Block [])),
+    testCase "methodDecl4" $ testParse p "t m(){1;}" (MethodDecl "t" "x" [] (Block [(ExpStm (I 1))])),
+    testCase "methodDecl5" $ testParse p "t m(){1;1;}" (MethodDecl "t" "x" [] (Block [(ExpStm (I 1)),(ExpStm (I 1))])),
+    testCase "methodDecl6" $ testParseFail p "t m()",
+    testCase "methodDecl7" $ testParseFail p "t m() 1;",
+    testCase "methodDecl8" $ testParseFail p "t m() return 1;",
+    testCase "methodDecl9" $ testParseFail p "m(){}",
+    testCase "methodDecl10" $ testParseFail p "m()",
+    testCase "methodDecl11" $ testParseFail p "m() 1;",
+    testCase "methodDecl12" $ testParseFail p "m() return 1;"
+  ]
+
+tests_classDecl p =
+  [
+    testCase "classDecl1" $ testParse p "class c {}" (ClassDecl "c" "" []),
+    testCase "classDecl2" $ testParse p "class c extends d {}" (ClassDecl "c" "d" []),
+    testCase "classDecl3" $ testParse p "class c extends d {t x;}" (ClassDecl "c" "d" [(FieldDecl "t" "x")]),
+    testCase "classDecl4" $ testParse p "class c extends d {t x; u y;}" (ClassDecl "c" "d" [(FieldDecl "t" "x"),(FieldDecl "u" "y")]),
+    testCase "classDecl5" $ testParse p "class c extends d {t m(){}}" (ClassDecl "c" "d" [(MethodDecl "t" "m" [] (Block []))]),
+    testCase "classDecl6" $ testParse p "class c extends d {t m(){} t x;}" (ClassDecl "c" "d" [(MethodDecl "t" "m" [] (Block [])),(FieldDecl "t" "x")]),
+    testCase "classDecl7" $ testParse p "class c extends d {t x; t m(){}}" (ClassDecl "c" "d" [(FieldDecl "t" "x"),(MethodDecl "t" "m" [] (Block []))]),
+    testCase "classDecl8" $ testParse p "class c extends d {t x; t m(){} u y;}" (ClassDecl "c" "d" [(FieldDecl "t" "x"),
+                                                                                                    (MethodDecl "t" "m" [] (Block [])),
+                                                                                                    (FieldDecl "u" "y")
+                                                                                                    ]),
+    testCase "classDecl8" $ testParse p "class c extends d {t m(){} u y; u n(){}}" (ClassDecl "c" "d" [(MethodDecl "t" "m" [] (Block [])),
+                                                                                                       (FieldDecl "u" "y"),
+                                                                                                       (MethodDecl "u" "n" [] (Block []))
+                                                                                                      ]),
+    testCase "classDecl9" $ testParseFail p "class",
+    testCase "classDecl10" $ testParseFail p "class c",
+    testCase "classDecl11" $ testParseFail p "class extends",
+    testCase "classDecl12" $ testParseFail p "class extends {}",
+    testCase "classDecl13" $ testParseFail p "class c extends {}"
+  ]
+
+tests_program p =
+  [
+    testCase "program1" $ testParse p "" [],
+    testCase "program2" $ testParse p "class c {}" [(ClassDecl "c" "" [])],
+    testCase "program3" $ testParse p "class c {} class d {}" [(ClassDecl "c" "" []),(ClassDecl "d" "" [])]
   ]
