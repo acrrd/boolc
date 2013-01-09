@@ -344,10 +344,10 @@ tests_fieldDecl p =
 tests_methodDecl p =
   [
     testCase "methodDecl1" $ testParse p "t m(){}" (MethodDecl "t" "m" [] (Block [])),
-    testCase "methodDecl2" $ testParse p "t m(t x){}" (MethodDecl "t" "x" [("t","x")] (Block [])),
-    testCase "methodDecl3" $ testParse p "t m(t x,u y){}" (MethodDecl "t" "x" [("t","x"),("u","y")] (Block [])),
-    testCase "methodDecl4" $ testParse p "t m(){1;}" (MethodDecl "t" "x" [] (Block [(ExpStm (I 1))])),
-    testCase "methodDecl5" $ testParse p "t m(){1;1;}" (MethodDecl "t" "x" [] (Block [(ExpStm (I 1)),(ExpStm (I 1))])),
+    testCase "methodDecl2" $ testParse p "t m(t x){}" (MethodDecl "t" "m" [("t","x")] (Block [])),
+    testCase "methodDecl3" $ testParse p "t m(t x,u y){}" (MethodDecl "t" "m" [("t","x"),("u","y")] (Block [])),
+    testCase "methodDecl4" $ testParse p "t m(){1;}" (MethodDecl "t" "m" [] (Block [(ExpStm (I 1))])),
+    testCase "methodDecl5" $ testParse p "t m(){1;1;}" (MethodDecl "t" "m" [] (Block [(ExpStm (I 1)),(ExpStm (I 1))])),
     testCase "methodDecl6" $ testParseFail p "t m()",
     testCase "methodDecl7" $ testParseFail p "t m() 1;",
     testCase "methodDecl8" $ testParseFail p "t m() return 1;",
