@@ -5,6 +5,7 @@ type VarName = String
 type TypeName = String
 type FieldName = String
 type MethodName = String
+type ClassName = String
 data Expression = I Int | B Bool | S String | Var VarName
                   | Null | Void
                   | Additive Operation Expression Expression
@@ -29,3 +30,13 @@ data Statement = NoOp
                | Return Expression
                | Block [Statement]
                deriving(Show,Eq)
+
+type ParameterDecl = (TypeName,VarName)
+
+data MemberDecl = FieldDecl TypeName FieldName
+                | MethodDecl TypeName MethodName [ParameterDecl] Statement
+                deriving(Show,Eq)
+
+data ClassDecl = ClassDecl ClassName ClassName [MemberDecl] deriving(Show,Eq)
+
+type Program = [ClassDecl]

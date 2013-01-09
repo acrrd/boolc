@@ -197,3 +197,15 @@ parseReturnStatement = liftM Return parseExpression
 
 parseBlockStatement :: Parser Statement
 parseBlockStatement = liftM Block $ braces $ many parseStatement
+
+parseFieldDecl :: Parser MemberDecl
+parseFieldDecl = return $ FieldDecl "" ""
+
+parseMethodDecl :: Parser MemberDecl
+parseMethodDecl = return $ MethodDecl "" "" [] NoOp
+
+parseClassDecl :: Parser ClassDecl
+parseClassDecl = return $ ClassDecl "" "" []
+
+parseProgram :: Parser Program
+parseProgram = return []
