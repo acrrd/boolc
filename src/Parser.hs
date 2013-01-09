@@ -55,6 +55,7 @@ stringLit  = Token.stringLiteral lexer
 commaSep  = Token.commaSep lexer
 dot  = Token.dot lexer
 operator  = Token.operator lexer
+braces =  Token.braces lexer
 
 reservedOpR :: String -> Parser String
 reservedOpR op = do currentop <- lookAhead oper                   
@@ -151,5 +152,48 @@ parseBooleanOrExpression =
 parseExpression :: Parser Expression
 parseExpression = parseBooleanOrExpression
 
+endStm :: Parser Statement -> Parser Statement
+endStm stmparser = do x <- stmparser
+                      semi
+                      return x
+
+
 parseStatement :: Parser Statement
-parseStatement = return NoOp
+parseStatement = choice [parseBlockStatement,
+                         parseNoOpStatement,
+                         try parseDeclarationStatement,
+                         parseExpStmOrAssignStatement,
+                         parseIfStatement,
+                         parseWhileStatement,
+                         parseReturnStatement
+                        ]
+
+parseNoOpStatement :: Parser Statement
+parseNoOpStatement = do semi
+                        return NoOp
+
+parseDeclarationStatement :: Parser Statement
+parseDeclarationStatement = endStm $ liftM2 Declaration identifier identifier
+
+parseExpStmOrAssignStatement :: Parser Statement
+parseExpStmOrAssignStatement = endStm $ do e1 <- parseExpression
+                                           option (ExpStm e1) $ parseAssign e1
+  where parseAssign e = do reservedOp "="
+                           liftM2 Assign (return e) parseExpression
+
+parseIfStatement :: Parser Statement
+parseIfStatement = liftM3 If parseCond parseThen parseElse
+  where parseCond = reserved "if" >> parens parseExpression
+        parseThen = parseStatement
+        parseElse = (try $ (reserved "else" >> parseStatement))
+                    <|> return NoOp
+
+parseWhileStatement :: Parser Statement
+parseWhileStatement = liftM2 While parseCond parseStatement
+  where parseCond = reserved "while" >> parens parseExpression
+
+parseReturnStatement :: Parser Statement
+parseReturnStatement = liftM Return parseExpression
+
+parseBlockStatement :: Parser Statement
+parseBlockStatement = liftM Block $ braces $ many parseStatement
