@@ -185,8 +185,7 @@ parseIfStatement :: Parser Statement
 parseIfStatement = liftM3 If parseCond parseThen parseElse
   where parseCond = reserved "if" >> parens parseExpression
         parseThen = parseStatement
-        parseElse = (try $ (reserved "else" >> parseStatement))
-                    <|> return NoOp
+        parseElse = option NoOp (reserved "else" >> parseStatement)
 
 parseWhileStatement :: Parser Statement
 parseWhileStatement = liftM2 While parseCond parseStatement
