@@ -8,6 +8,12 @@ import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as Token
 
+type ExpressionSP = Expression SourcePos
+type StatementSP = Statement SourcePos
+type MemberDeclSP = MemberDecl SourcePos
+type ClassDeclSP = ClassDecl SourcePos
+type ProgramSP = Program SourcePos
+
 languageDef = emptyDef
                 { commentStart	 = "/*"
                 , commentEnd	 = "*/"
@@ -75,90 +81,92 @@ reservedOp :: String -> Parser ()
 --reservedOp op = (Token.lexeme lexer $ reservedOpR op) >> return ()
 reservedOp op = reservedOpR op >> return ()
 
-parseBinaryOp :: (String -> Expression -> Expression -> Expression) ->
+parseBinaryOp :: (SourcePos -> String -> ExpressionSP -> ExpressionSP -> ExpressionSP) ->
                  [String] ->
-                 Parser (Expression -> Expression -> Expression)
-parseBinaryOp node ops = choice $ map (\op -> reservedOp op >> (return $ node op)) ops
+                 Parser (ExpressionSP -> ExpressionSP -> ExpressionSP)
+parseBinaryOp node ops = choice $ map (\op -> liftM3 (const.node) getPosition (reservedOp op) (return op)) ops
 
-parseBinaryExpression :: Parser Expression -> 
-                         (String -> Expression -> Expression -> Expression) ->
+parseBinaryExpression :: Parser ExpressionSP -> 
+                         (SourcePos -> String -> ExpressionSP -> ExpressionSP -> ExpressionSP) ->
                          [String] ->
-                         Parser Expression
+                         Parser ExpressionSP
 parseBinaryExpression parseSubExp node ops = 
   chainl1 parseSubExp (parseBinaryOp node ops)
 
-parseLiteral :: Parser Expression
-parseLiteral = liftM I (liftM fromInteger natural)
-                <|> liftM S stringLit
-                <|> (reserved "true" >> (return $ B True))
-                <|> (reserved "false" >> (return $ B False))
-                <|> (reserved "null" >> (return $ Null))
+parseLiteral :: Parser ExpressionSP
+parseLiteral =  liftM2 I getPosition (liftM fromInteger natural)
+                <|> liftM2 S getPosition stringLit
+                <|> liftM2 B getPosition parseTrue
+                <|> liftM2 B getPosition parseFalse
+                <|> liftM2 (const.Null) getPosition (reserved "null")
+  where parseTrue = reserved "true" >> (return True)
+        parseFalse = reserved "false" >> (return False)
 
-parseVariable :: Parser Expression
-parseVariable = (reserved "this" >> (return $ Var "this"))
-                 <|> liftM Var identifier
+parseVariable :: Parser ExpressionSP
+parseVariable = liftM2 Var getPosition (parseThis <|> identifier)
+  where parseThis = reserved "this" >> (return "this")
 
-parsePrimaryExpression :: Parser Expression
+parsePrimaryExpression :: Parser ExpressionSP
 parsePrimaryExpression = parseLiteral
                          <|> parseVariable
                          <|> parens parseExpression
-                         <|> (reserved "new" >> (liftM2 New identifier $ parens $ commaSep parseExpression))
+                         <|> (liftM4 (\p _ -> New p) getPosition (reserved "new")  identifier $ parens $ commaSep parseExpression)
 
-parsePostfixExpression :: Parser Expression
+parsePostfixExpression :: Parser ExpressionSP
 parsePostfixExpression =  liftM2 (foldl (flip ($))) parsePrimaryExpression parseMembersAccess
   where parseMembersAccess = (dot >> sepBy1 parseMemberAccess dot) <|> return []
-        parseMemberAccess = do id <- identifier
-                               option (FieldAccess id) $ liftM (MethodCall id) (parens $ commaSep parseExpression)
+        parseMemberAccess = do pos <- getPosition
+                               id <- identifier
+                               option (FieldAccess pos id) $ liftM (MethodCall pos id) (parens $ commaSep parseExpression)
 
 parsePrimitiveTypes :: Parser TypeName
 parsePrimitiveTypes = 
   choice $ map (\t -> reserved t >> (return t)) ["bool","int","void"]
 
-parseUnaryExpressionNotPlusMinus :: Parser Expression
+parseUnaryExpressionNotPlusMinus :: Parser ExpressionSP
 parseUnaryExpressionNotPlusMinus = 
-  (reservedOp "!" >> liftM Not (parseUnaryExpression))
-  <|> liftM2 Cast (try $ parens parsePrimitiveTypes) parseUnaryExpression
-  <|> (try $ liftM2 Cast (parens identifier) parseUnaryExpressionNotPlusMinus)
+  liftM3 (\p _ -> Not p) getPosition (reservedOp "!") parseUnaryExpression
+  <|> liftM3 Cast getPosition (try $ parens parsePrimitiveTypes) parseUnaryExpression
+  <|> (try $ liftM3 Cast getPosition (parens identifier) parseUnaryExpressionNotPlusMinus)
   <|> parsePostfixExpression
 
-parseUnaryExpression :: Parser Expression
-parseUnaryExpression = (reservedOp "-" >> liftM Negative (parseUnaryExpression))
+parseUnaryExpression :: Parser ExpressionSP
+parseUnaryExpression = liftM3 (const.Negative) getPosition (reservedOp "-") parseUnaryExpression
                        <|> parseUnaryExpressionNotPlusMinus
 
-parseMultiplicativeExpression :: Parser Expression
+parseMultiplicativeExpression :: Parser ExpressionSP
 parseMultiplicativeExpression =
   parseBinaryExpression parseUnaryExpression Multiplicative ["*","/"]
 
-parseAdditiveExpression :: Parser Expression
+parseAdditiveExpression :: Parser ExpressionSP
 parseAdditiveExpression =
   parseBinaryExpression parseMultiplicativeExpression Additive ["+","-"]
 
-parseRelationalExpression :: Parser Expression
+parseRelationalExpression :: Parser ExpressionSP
 parseRelationalExpression = 
   parseBinaryExpression parseAdditiveExpression Relational ["<","<=",">",">="]
 
-parseEqualityExpression :: Parser Expression
+parseEqualityExpression :: Parser ExpressionSP
 parseEqualityExpression = 
   parseBinaryExpression parseRelationalExpression Equality ["==","!="]
 
-parseBooleanAndExpression :: Parser Expression
+parseBooleanAndExpression :: Parser ExpressionSP
 parseBooleanAndExpression = 
   parseBinaryExpression parseEqualityExpression Boolean ["&&"]
 
-parseBooleanOrExpression :: Parser Expression
+parseBooleanOrExpression :: Parser ExpressionSP
 parseBooleanOrExpression =
   parseBinaryExpression parseBooleanAndExpression Boolean ["||"]
 
-parseExpression :: Parser Expression
+parseExpression :: Parser ExpressionSP
 parseExpression = parseBooleanOrExpression
 
-endStm :: Parser Statement -> Parser Statement
+endStm :: Parser StatementSP -> Parser StatementSP
 endStm stmparser = do x <- stmparser
                       semi
                       return x
 
-
-parseStatement :: Parser Statement
+parseStatement :: Parser StatementSP
 parseStatement = choice [parseBlockStatement,
                          parseNoOpStatement,
                          try parseDeclarationStatement,
@@ -168,52 +176,53 @@ parseStatement = choice [parseBlockStatement,
                          parseReturnStatement
                         ]
 
-parseNoOpStatement :: Parser Statement
-parseNoOpStatement = do semi
-                        return NoOp
+parseNoOpStatement :: Parser StatementSP
+parseNoOpStatement = liftM2 (const.NoOp) getPosition semi
 
-parseDeclarationStatement :: Parser Statement
-parseDeclarationStatement = endStm $ liftM2 Declaration identifier identifier
+parseDeclarationStatement :: Parser StatementSP
+parseDeclarationStatement = endStm $ liftM3 Declaration getPosition identifier identifier
 
-parseExpStmOrAssignStatement :: Parser Statement
+parseExpStmOrAssignStatement :: Parser StatementSP
 parseExpStmOrAssignStatement = endStm $ do e1 <- parseExpression
                                            option (ExpStm e1) $ parseAssign e1
-  where parseAssign e = do reservedOp "="
-                           liftM2 Assign (return e) parseExpression
+  where parseAssign e = do pos <- getPosition
+                           reservedOp "="
+                           liftM3 Assign (return pos) (return e) parseExpression
 
-parseIfStatement :: Parser Statement
+parseIfStatement :: Parser StatementSP
 parseIfStatement = liftM3 If parseCond parseThen parseElse
   where parseCond = reserved "if" >> parens parseExpression
         parseThen = parseStatement
-        parseElse = option NoOp (reserved "else" >> parseStatement)
+        parseElse = do pos <- getPosition
+                       option (NoOp pos) (reserved "else" >> parseStatement)
 
-parseWhileStatement :: Parser Statement
+parseWhileStatement :: Parser StatementSP
 parseWhileStatement = liftM2 While parseCond parseStatement
   where parseCond = reserved "while" >> parens parseExpression
 
-parseReturnStatement :: Parser Statement
-parseReturnStatement = liftM Return parseExpression
+parseReturnStatement :: Parser StatementSP
+parseReturnStatement = liftM2 Return getPosition parseExpression
 
-parseBlockStatement :: Parser Statement
+parseBlockStatement :: Parser StatementSP
 parseBlockStatement = liftM Block $ braces $ many parseStatement
 
 -- Reuse declaration parser
-parseFieldDecl :: Parser MemberDecl
+parseFieldDecl :: Parser MemberDeclSP
 parseFieldDecl = do d <- parseDeclarationStatement
-                    let (Declaration t v) = d
-                    return $ FieldDecl t v
+                    let (Declaration pos t v) = d
+                    return $ FieldDecl pos t v
 
-parseMethodDecl :: Parser MemberDecl
-parseMethodDecl = liftM4 MethodDecl identifier identifier parseParameterDecl parseBody
-  where parseParameterDecl = parens $ commaSep $ liftM2 (,) identifier identifier
+parseMethodDecl :: Parser MemberDeclSP
+parseMethodDecl = liftM5 MethodDecl getPosition identifier identifier parseParameterDecl parseBody
+  where parseParameterDecl = parens $ commaSep $ liftM3 ParameterDecl getPosition identifier identifier
         parseBody = parseBlockStatement
 
-parseClassDecl :: Parser ClassDecl
-parseClassDecl = liftM3 ClassDecl parseClassName parseExtends parseClassBody
+parseClassDecl :: Parser ClassDeclSP
+parseClassDecl = liftM4 ClassDecl getPosition parseClassName parseExtends parseClassBody
   where parseClassName = reserved "class" >> identifier
         parseExtends = option "" (reserved "extends" >> identifier)
         parseClassBody = braces $ many $ (try parseFieldDecl <|> parseMethodDecl)
 
-parseProgram :: Parser Program
-parseProgram = many parseClassDecl
+parseProgram :: Parser ProgramSP
+parseProgram = liftM Program $ many parseClassDecl
 
