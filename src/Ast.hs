@@ -23,10 +23,10 @@ data Expression a = I a Int | B a Bool | S a String| Var a VarName
 
 data Statement a = NoOp a
                  | Declaration a TypeName VarName
-                 | ExpStm a (Expression a)
+                 | ExpStm (Expression a)
                  | Assign a (Expression a) (Expression a)
-                 | If a (Expression a) (Statement a) (Statement a)
-                 | While a (Expression a) (Statement a)
+                 | If (Expression a) (Statement a) (Statement a)
+                 | While (Expression a) (Statement a)
                  | Return a (Expression a)
                  | Block [Statement a]
                  deriving(Show,Eq)
@@ -39,7 +39,7 @@ data MemberDecl a = FieldDecl a TypeName FieldName
 
 data ClassDecl a = ClassDecl a ClassName ClassName [MemberDecl a] deriving(Show,Eq)
 
-type Program a = [ClassDecl a]
+data Program a = Program [ClassDecl a] deriving(Show,Eq)
 
 instance Functor Expression where
   fmap f (I a n) = I (f a) n
@@ -63,10 +63,10 @@ instance Functor Expression where
 instance Functor Statement where
   fmap f (NoOp a)= NoOp $ f a
   fmap f (Declaration a t v) = Declaration (f a) t v
-  fmap f (ExpStm a e) = ExpStm (f a) (fmap f e)
+  fmap f (ExpStm e) = ExpStm $ fmap f e
   fmap f (Assign a e ev) = Assign (f a) (fmap f e) (fmap f ev)
-  fmap f (If a c t e) = If (f a) (fmap f c) (fmap f t) (fmap f e)
-  fmap f (While a c s) = While (f a) (fmap f c) (fmap f  s)
+  fmap f (If c t e) = If (fmap f c) (fmap f t) (fmap f e)
+  fmap f (While c s) = While (fmap f c) (fmap f  s)
   fmap f (Return a e) = Return (f a) (fmap f e)
   fmap f (Block ss) = Block $ fmap (fmap f) ss
 
@@ -79,6 +79,9 @@ instance Functor MemberDecl where
 
 instance Functor ClassDecl where 
   fmap f (ClassDecl a n pn md) = ClassDecl (f a) n pn (fmap (fmap f) md)
+
+instance Functor Program where 
+  fmap f (Program cds) = Program (fmap (fmap f) cds)
 
 {--
 instance Eq (Expression a) where
