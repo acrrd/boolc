@@ -8,11 +8,13 @@ import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as Token
 
-type ExpressionSP = Expression SourcePos
-type StatementSP = Statement SourcePos
-type MemberDeclSP = MemberDecl SourcePos
-type ClassDeclSP = ClassDecl SourcePos
-type ProgramSP = Program SourcePos
+type SourcePosInfo = SourcePos
+type ExpressionSP = Expression SourcePosInfo
+type StatementSP = Statement SourcePosInfo
+type MemberDeclSP = MemberDecl SourcePosInfo
+type ClassDeclSP = ClassDecl SourcePosInfo
+type ProgramSP = Program SourcePosInfo
+
 
 languageDef = emptyDef
                 { commentStart	 = "/*"
