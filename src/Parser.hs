@@ -16,6 +16,9 @@ type ClassDeclSP = ClassDecl SourcePosInfo
 type ProgramSP = Program SourcePosInfo
 
 
+runBoolParser :: SourceName -> String -> Either ParseError ProgramSP
+runBoolParser fn = (parse parseBool fn)
+
 languageDef = emptyDef
                 { commentStart	 = "/*"
                 , commentEnd	 = "*/"
@@ -64,6 +67,13 @@ commaSep  = Token.commaSep lexer
 dot  = Token.dot lexer
 operator  = Token.operator lexer
 braces =  Token.braces lexer
+
+parseBool :: Parser ProgramSP
+parseBool = do whiteSpace
+               r <- parseProgram
+               eof
+               return r
+
 
 reservedOpR :: String -> Parser String
 reservedOpR op = do currentop <- lookAhead oper                   
