@@ -19,6 +19,7 @@ data Expression a = I a Int | B a Bool | S a String| Var a VarName
                   | FieldAccess a FieldName (Expression a)
                   | MethodCall a MethodName [Expression a] (Expression a)
                   | New a TypeName [Expression a]
+                  | DeRef (Expression a)
                   deriving(Show,Eq)
 
 data Statement a = NoOp a
