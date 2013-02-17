@@ -11,10 +11,12 @@ import qualified Text.ParserCombinators.Parsec.Token as Token
 type SourcePosInfo = SourcePos
 type ExpressionSP = Expression SourcePosInfo
 type StatementSP = Statement SourcePosInfo
-type MemberDeclSP = MemberDecl SourcePosInfo
+type FieldDeclSP = FieldDecl SourcePosInfo
+type MethodDeclSP = MethodDecl SourcePosInfo
 type ClassDeclSP = ClassDecl SourcePosInfo
 type ProgramSP = Program SourcePosInfo
 
+data MemberSP = F FieldDeclSP | M MethodDeclSP
 
 runBoolParser :: SourceName -> String -> Either ParseError ProgramSP
 runBoolParser fn = (parse parseBool fn)
@@ -219,21 +221,32 @@ parseBlockStatement :: Parser StatementSP
 parseBlockStatement = liftM Block $ braces $ many parseStatement
 
 -- Reuse declaration parser
-parseFieldDecl :: Parser MemberDeclSP
+parseFieldDecl :: Parser FieldDeclSP
 parseFieldDecl = do d <- parseDeclarationStatement
                     let (Declaration pos t v) = d
                     return $ FieldDecl pos t v
 
-parseMethodDecl :: Parser MemberDeclSP
+parseMethodDecl :: Parser MethodDeclSP
 parseMethodDecl = liftM5 MethodDecl getPosition identifier identifier parseParameterDecl parseBody
   where parseParameterDecl = parens $ commaSep $ liftM3 ParameterDecl getPosition identifier identifier
         parseBody = parseBlockStatement
 
+parseMember :: Parser MemberSP
+parseMember =  (try $ liftM M parseMethodDecl)
+               <|> liftM F parseFieldDecl
+
 parseClassDecl :: Parser ClassDeclSP
-parseClassDecl = liftM4 ClassDecl getPosition parseClassName parseExtends parseClassBody
+parseClassDecl = liftM4 buildClassDecl getPosition parseClassName parseExtends parseClassBody
   where parseClassName = reserved "class" >> identifier
         parseExtends = option "" (reserved "extends" >> identifier)
-        parseClassBody = braces $ many $ (try parseFieldDecl <|> parseMethodDecl)
+        parseClassBody = braces $ many parseMember
+        buildClassDecl i cn pn ms = let partms =  partition isField ms in
+                                      ClassDecl i cn pn (map ef $ fst partms) (map em $snd partms)
+        isField m = case m of 
+                      F _ -> True
+                      _ -> False
+        ef (F f) = f
+        em (M m) = m
 
 parseProgram :: Parser ProgramSP
 parseProgram = liftM Program $ many parseClassDecl

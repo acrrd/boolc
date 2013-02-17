@@ -34,11 +34,10 @@ data Statement a = NoOp a
 
 data ParameterDecl a = ParameterDecl a TypeName VarName deriving(Show,Eq)
 
-data MemberDecl a = FieldDecl a TypeName FieldName
-                  | MethodDecl a TypeName MethodName [ParameterDecl a] (Statement a)
-                  deriving(Show,Eq)
+data FieldDecl a = FieldDecl a TypeName FieldName deriving(Show,Eq)
+data MethodDecl a = MethodDecl a TypeName MethodName [ParameterDecl a] (Statement a) deriving(Show,Eq)
 
-data ClassDecl a = ClassDecl a ClassName ClassName [MemberDecl a] deriving(Show,Eq)
+data ClassDecl a = ClassDecl a ClassName ClassName [FieldDecl a] [MethodDecl a] deriving(Show,Eq)
 
 data Program a = Program [ClassDecl a] deriving(Show,Eq)
 
@@ -74,12 +73,14 @@ instance Functor Statement where
 instance Functor ParameterDecl where 
   fmap f (ParameterDecl a t v) = ParameterDecl (f a) t v
 
-instance Functor MemberDecl where 
+instance Functor FieldDecl where
   fmap f (FieldDecl a t n) = FieldDecl (f a) t n
+
+instance Functor MethodDecl where
   fmap f (MethodDecl a t n ps s) = MethodDecl (f a) t n (fmap (fmap f) ps) (fmap f s)
 
 instance Functor ClassDecl where 
-  fmap f (ClassDecl a n pn md) = ClassDecl (f a) n pn (fmap (fmap f) md)
+  fmap f (ClassDecl a n pn fd md) = ClassDecl (f a) n pn (fmap (fmap f) fd) (fmap (fmap f) md)
 
 instance Functor Program where 
   fmap f (Program cds) = Program (fmap (fmap f) cds)

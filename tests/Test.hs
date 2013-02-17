@@ -374,21 +374,20 @@ tests_methodDecl p =
 
 tests_classDecl p =
   [
-    testCase "classDecl1" $ testParseAST p "class c {}" (ClassDecl () "c" "" []),
-    testCase "classDecl2" $ testParseAST p "class c extends d {}" (ClassDecl () "c" "d" []),
-    testCase "classDecl3" $ testParseAST p "class c extends d {t x;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x")]),
-    testCase "classDecl4" $ testParseAST p "class c extends d {t x; u y;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x"),(FieldDecl () "u" "y")]),
-    testCase "classDecl5" $ testParseAST p "class c extends d {t m(){}}" (ClassDecl () "c" "d" [(MethodDecl () "t" "m" [] (Block []))]),
-    testCase "classDecl6" $ testParseAST p "class c extends d {t m(){} t x;}" (ClassDecl () "c" "d" [(MethodDecl () "t" "m" [] (Block [])),(FieldDecl () "t" "x")]),
-    testCase "classDecl7" $ testParseAST p "class c extends d {t x; t m(){}}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x"),(MethodDecl () "t" "m" [] (Block []))]),
-    testCase "classDecl8" $ testParseAST p "class c extends d {t x; t m(){} u y;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x"),
-                                                                                                          (MethodDecl () "t" "m" [] (Block [])),
-                                                                                                          (FieldDecl () "u" "y")
-                                                                                                         ]),
-    testCase "classDecl8" $ testParseAST p "class c extends d {t m(){} u y; u n(){}}" (ClassDecl () "c" "d" [(MethodDecl () "t" "m" [] (Block [])),
-                                                                                                             (FieldDecl () "u" "y"),
-                                                                                                             (MethodDecl () "u" "n" [] (Block []))
-                                                                                                            ]),
+    testCase "classDecl1" $ testParseAST p "class c {}" (ClassDecl () "c" "" [] []),
+    testCase "classDecl2" $ testParseAST p "class c extends d {}" (ClassDecl () "c" "d" [] []),
+    testCase "classDecl3" $ testParseAST p "class c extends d {t x;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x")] []),
+    testCase "classDecl4" $ testParseAST p "class c extends d {t x; u y;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x"),(FieldDecl () "u" "y")] []),
+    testCase "classDecl5" $ testParseAST p "class c extends d {t m(){}}" (ClassDecl () "c" "d" [] [(MethodDecl () "t" "m" [] (Block []))]),
+    testCase "classDecl6" $ testParseAST p "class c extends d {t m(){} t x;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x")] 
+                                                                                                    [(MethodDecl () "t" "m" [] (Block []))]),
+    testCase "classDecl7" $ testParseAST p "class c extends d {t x; t m(){}}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x")] 
+                                                                                                    [(MethodDecl () "t" "m" [] (Block []))]),
+    testCase "classDecl8" $ testParseAST p "class c extends d {t x; t m(){} u y;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x"), (FieldDecl () "u" "y")]
+                                                                                                         [(MethodDecl () "t" "m" [] (Block []))]),
+    testCase "classDecl8" $ testParseAST p "class c extends d {t m(){} u y; u n(){}}" (ClassDecl () "c" "d" [(FieldDecl () "u" "y")] 
+                                                                                                            [(MethodDecl () "t" "m" [] (Block [])),
+                                                                                                             (MethodDecl () "u" "n" [] (Block []))]),
     testCase "classDecl9" $ testParseFail p "class",
     testCase "classDecl10" $ testParseFail p "class c",
     testCase "classDecl11" $ testParseFail p "class extends",
@@ -399,6 +398,6 @@ tests_classDecl p =
 tests_program p =
   [
     testCase "program1" $ testParseAST p "" (Program []),
-    testCase "program2" $ testParseAST p "class c {}" (Program [(ClassDecl () "c" "" [])]),
-    testCase "program3" $ testParseAST p "class c {} class d {}" (Program [(ClassDecl () "c" "" []),(ClassDecl () "d" "" [])])
+    testCase "program2" $ testParseAST p "class c {}" (Program [(ClassDecl () "c" "" [] [])]),
+    testCase "program3" $ testParseAST p "class c {} class d {}" (Program [(ClassDecl () "c" "" [] []),(ClassDecl () "d" "" [] [])])
   ]
