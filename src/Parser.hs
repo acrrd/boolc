@@ -204,15 +204,17 @@ parseExpStmOrAssignStatement = endStm $ do e1 <- parseExpression
                            liftM3 Assign (return pos) (return e) parseExpression
 
 parseIfStatement :: Parser StatementSP
-parseIfStatement = liftM3 If parseCond parseThen parseElse
-  where parseCond = reserved "if" >> parens parseExpression
+parseIfStatement = liftM4 If parsePos parseCond parseThen parseElse
+  where parsePos = reserved "if" >> getPosition
+        parseCond = parens parseExpression
         parseThen = parseStatement
         parseElse = do pos <- getPosition
                        option (NoOp pos) (reserved "else" >> parseStatement)
 
 parseWhileStatement :: Parser StatementSP
-parseWhileStatement = liftM2 While parseCond parseStatement
-  where parseCond = reserved "while" >> parens parseExpression
+parseWhileStatement = liftM3 While parsePos parseCond parseStatement
+  where parsePos = reserved "while" >> getPosition
+        parseCond = parens parseExpression
 
 parseReturnStatement :: Parser StatementSP
 parseReturnStatement = liftM2 Return getPosition parseExpression
