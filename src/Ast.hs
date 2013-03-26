@@ -26,8 +26,8 @@ data Statement a = NoOp a
                  | Declaration a TypeName VarName
                  | ExpStm (Expression a)
                  | Assign a (Expression a) (Expression a)
-                 | If (Expression a) (Statement a) (Statement a)
-                 | While (Expression a) (Statement a)
+                 | If a (Expression a) (Statement a) (Statement a)
+                 | While a (Expression a) (Statement a)
                  | Return a (Expression a)
                  | Block [Statement a]
                  deriving(Show,Eq)
@@ -65,8 +65,8 @@ instance Functor Statement where
   fmap f (Declaration a t v) = Declaration (f a) t v
   fmap f (ExpStm e) = ExpStm $ fmap f e
   fmap f (Assign a e ev) = Assign (f a) (fmap f e) (fmap f ev)
-  fmap f (If c t e) = If (fmap f c) (fmap f t) (fmap f e)
-  fmap f (While c s) = While (fmap f c) (fmap f  s)
+  fmap f (If a c t e) = If (f a) (fmap f c) (fmap f t) (fmap f e)
+  fmap f (While a c s) = While (f a) (fmap f c) (fmap f  s)
   fmap f (Return a e) = Return (f a) (fmap f e)
   fmap f (Block ss) = Block $ fmap (fmap f) ss
 
