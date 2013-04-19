@@ -10,7 +10,7 @@ desugar (Program cds) = Program $ map desugarCD cds
         desugarCD (ClassDecl i cn pn fs ms) = ClassDecl i cn (desugarParent pn) fs $ map desugarMethod ms
 
         desugarParent "" = "Object"
-        desugarParent = id
+        desugarParent s = s
 
         desugarMethod :: MethodDecl a -> MethodDecl a
         desugarMethod (MethodDecl i r mn ps b) = MethodDecl i r mn ps $ evalState (desugarStm b) (parametersName ps)
