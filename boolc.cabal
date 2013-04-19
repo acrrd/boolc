@@ -11,14 +11,15 @@ build-type:          Simple
 cabal-version:       >=1.2
 
 executable boolc
-  build-depends: base ==4.5.*, parsec
+  build-depends: base ==4.5.*, parsec, containers, mtl, transformers
   main-is: Main.hs
-  other-modules: Ast, Parser
+  other-modules: Ast, AstUtils, Parser, Typesystem
   hs-source-dirs: src
 
 Test-Suite boolc-test
   build-depends: HUnit,test-framework,test-framework-hunit
   hs-source-dirs: src,tests
   main-is: Test.hs
+  other-modules TestParser, TestTypechecking
   type: exitcode-stdio-1.0
 
