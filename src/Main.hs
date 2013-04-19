@@ -1,6 +1,8 @@
 module Main(main) where
 
 import Parser
+import AstUtils
+import Typesystem
 
 import System.Environment
 import System.Exit (exitSuccess)
