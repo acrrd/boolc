@@ -4,6 +4,7 @@ import Ast
 import Parser (ExpressionSP,StatementSP,FieldDeclSP,MethodDeclSP,ClassDeclSP,ProgramSP)
 
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Control.Monad
 import Control.Monad.Error
 import Control.Monad.State
@@ -15,7 +16,7 @@ data Type = TInt | TBool | TString | TVoid | TNull
           | TObjId ClassName | TRef Type
           deriving (Eq,Show)
 
-data ClassType = CT ClassName ClassName [FieldName] FieldsType MethodsType
+data ClassType = CT ClassName ClassName [FieldName] FieldsType MethodsType deriving(Eq,Show)
 type FieldsType = Map.Map FieldName Type
 type MethodType = ([Type],Type)
 type MethodsType = Map.Map MethodName MethodType
@@ -36,10 +37,10 @@ data TypeError a = MultipleError [TypeError a]
                  | InvalidBinOperandsError a Operation Type Type
                  | InvalidUnaOperandsError a Operation Type
                  | IncompatibleType a Type [Type]
-                 | MethodApplyError a [Type] [Type]
+                 | ParameterTypeError a [Type] [Type]
                  | LeftValueError a Type
+                 | CyclicInheritance a ClassName
                    deriving (Show)
---                 | CastTypeError a Type Type
 
 instance Error (TypeError a) where
   noMsg = MiscError "Unknown error"
@@ -53,7 +54,7 @@ type TypesystemEnv i = ReaderT ClassTypeEnv (BaseComputation i)
 type TypeExpressionEnv i = StateT (GlobalSymTable,LocalSymTable) (TypesystemEnv i)
 -- the env is the type used to type return
 type TypeStatementEnv i = ReaderT Type (TypeExpressionEnv i)
-
+type BuildClassEnvComp i = StateT ClassTypeEnv (BaseComputation i)
 
 primitiveTypesMap :: Map.Map TypeName Type
 primitiveTypesMap = foldr (uncurry Map.insert) Map.empty
@@ -65,7 +66,7 @@ typename2Type s = case Map.lookup s primitiveTypesMap of
                     Nothing -> TObjId s
 
 getParametersType :: [ParameterDecl a] -> [Type]
-getParametersType = map (\(ParameterDecl _ t _) -> TRef $ typename2Type t)
+getParametersType = map (\(ParameterDecl _ t _) -> typename2Type t)
 
 buildInTypes :: ClassTypeEnv
 buildInTypes = Map.insert "Object" (CT "Object" "" [] me me) $
@@ -75,15 +76,13 @@ buildInTypes = Map.insert "Object" (CT "Object" "" [] me me) $
 globalSymbols :: Map.Map VarName Type
 globalSymbols = Map.empty
 
-buildClassTypeEnv :: Program a -> TypesystemEnv a ClassTypeEnv
-buildClassTypeEnv (Program cds) = do env <- ask
-                                     lift $ execStateT (mapM_ buildProgramEnv' cds) env
-  where buildProgramEnv' :: ClassDecl a -> 
-                            StateT ClassTypeEnv (BaseComputation a) ()
+buildClassTypeEnv :: Program i -> BuildClassEnvComp i ()
+buildClassTypeEnv (Program cds) = mapM_ buildProgramEnv' cds
+  where buildProgramEnv' :: ClassDecl i -> BuildClassEnvComp i ()
         buildProgramEnv' (ClassDecl i cn pn fs ms) = 
           do s <- get
              when (Map.member cn s) $ throwError (DuplicateClass cn i)
-             mf <- lift $ exec buildFieldType cn fs                                                      
+             mf <- lift $ exec buildFieldType cn fs
              mm <- lift $ exec buildMethodType cn ms
              let fts = foldr (\(FieldDecl _ _ fn) a -> fn:a) [] fs
              put $ Map.insert cn (CT cn pn fts mf mm) s
@@ -109,57 +108,32 @@ buildClassTypeEnv (Program cds) = do env <- ask
                                                         put $ Map.insert mn (pst,rt) ms
 
         exec m cn xs = execStateT (runReaderT (mapM_ m xs) cn) Map.empty
-{--
-buildClassTypeEnv :: Program a -> BaseComputation a ClassTypeEnv
-buildClassTypeEnv (Program cds) = execStateT (mapM_ buildProgramEnv' cds) Map.empty
-  where buildProgramEnv' :: ClassDecl a -> 
-                            StateT ClassTypeEnv (BaseComputation a) ()
-        buildProgramEnv' (ClassDecl i cn pn fs ms) = 
-          do s <- get
-             when (Map.member cn s) $ throwError (DuplicateClass cn i)
-             mf <- lift $ exec buildFieldType cn fs                                                      
-             mm <- lift $ exec buildMethodType cn ms
-             let fts = foldr (\(FieldDecl _ _ fn) a -> fn:a) [] fs
-             put $ Map.insert cn (CT cn pn fts mf mm) s
 
-        buildFieldType :: FieldDecl a -> 
-                          ReaderT ClassName (StateT FieldsType (BaseComputation a)) ()
-        buildFieldType (FieldDecl i t fn) = do fs <- get
-                                               when (Map.member fn fs) 
-                                                 (do cn <- ask
-                                                     throwError (DuplicateField cn fn i)
-                                                 )
-                                               put $ Map.insert fn (TRef $ typename2Type t) fs
-
-        buildMethodType :: MethodDecl a -> 
-                          ReaderT ClassName (StateT MethodsType (BaseComputation a)) ()
-        buildMethodType (MethodDecl i ret mn ps _) = do ms <- get
-                                                        when (Map.member mn ms) 
-                                                          (do cn <- ask
-                                                              throwError (DuplicateMethod cn mn i)
-                                                          )
-                                                        let rt = typename2Type ret
-                                                            pst = getParametersType ps
-                                                        put $ Map.insert mn (pst,rt) ms
-
-        exec m cn xs = execStateT (runReaderT (mapM_ m xs) cn) Map.empty
---}
 typeExist :: TypeName -> a -> TypesystemEnv a ()
 typeExist t i = do env <- ask
                    when (not (Map.member t env || Map.member t primitiveTypesMap))
                      $ throwError (ClassDontExit t i)
 
 type CheckMemberEnv i = ReaderT ClassName (TypesystemEnv i)
+type WellFormedComp i = ReaderT (Set.Set ClassName) (StateT (Set.Set ClassName) (TypesystemEnv i))
 
 isWellFormed :: Program a -> TypesystemEnv a ()
-isWellFormed (Program cds) = mapM_ isWellFormed' cds
+isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' prog) cds) Set.empty) Set.empty
 
-  where isWellFormed' :: ClassDecl a -> TypesystemEnv a ()
-        isWellFormed' (ClassDecl i cn pn fs ms) = 
-          do env <- ask
-             when (Map.member pn env) $ throwError (ClassDontExit pn i)
-             runReaderT (mapM_ checkField fs) cn
-             runReaderT (mapM_ checkMethod ms) cn
+  where isWellFormed' :: Program i -> ClassDecl i -> WellFormedComp i ()
+        isWellFormed' prog@(Program cds) (ClassDecl i cn pn fs ms)  =
+          do cycle <- asks $ Set.member cn
+             when cycle $ throwError $ CyclicInheritance i cn
+             checked <- gets $ Set.member cn
+             if checked then return ()
+               else do modify $ Set.insert cn
+                       if null pn then return ()
+                         else if Map.member pn  buildInTypes then return ()
+                                else do case find (\(ClassDecl _ cn' _ _ _) -> if pn == cn' then True else False ) cds of
+                                          Nothing -> throwError $ ClassDontExit pn i
+                                          Just pd -> do local (Set.insert cn) $ isWellFormed' prog pd
+                                                        lift $ lift $ runReaderT (mapM_ checkField fs) cn
+                                                        lift $ lift $ runReaderT (mapM_ checkMethod ms) cn
 
         checkMethod :: MethodDecl a -> CheckMemberEnv a ()
         checkMethod (MethodDecl i ret m ps s) = do lift $ typeExist ret i
@@ -195,7 +169,10 @@ isWellFormed (Program cds) = mapM_ isWellFormed' cds
         getParentType = do cn <- ask
                            env <- lift ask
                            case Map.lookup cn env of
-                             Just pcd -> return pcd
+                             Just (CT _ pn _ _ _) ->
+                               case Map.lookup pn env of
+                                 Just pct -> return pct
+                                 Nothing -> throwError $ MiscError "Parent class is not in the environment"
                              Nothing -> throwError $ MiscError "Current class is not in the environment"
 
 buildConstrArgs :: ClassTypeEnv -> ClassTypeEnv
@@ -244,13 +221,30 @@ typeExp (MethodCall i mn ps e) = do et <- typeExp e
                                     return rt
 
 typeExp (New i cn ps) = do (CT _ _ kn fm _) <- lift $ getClassType i cn 
-                           kt <- mapM (\fn -> case Map.lookup fn fm of 
-                                                Just t -> return t
-                                                Nothing -> throwError $ MiscError "Illformed class type"
-                                      ) kn
+                           kt <- lift $ getContructorType i cn
                            pst' <- mapM typeExp ps
                            lift $ typeParameters i kt pst'
                            return $ typename2Type cn
+typeExp (DeRef e) = do t <- typeExp e
+                       case t of
+                         TRef t' -> return t'
+                         _ -> throwError $ MiscError "DeRef applied to a non ref"
+
+getContructorType :: a -> ClassName -> TypesystemEnv a [Type]
+getContructorType i cn =  do kn <- getContrField i cn
+                             mapM (getContrFieldType i cn) kn
+
+  where getContrField :: a -> ClassName -> TypesystemEnv a [FieldName]
+        getContrField i cn = do (CT _ pn kn _ _) <- getClassType i cn
+                                if not $ null pn then liftM (++kn) $ getContrField i pn
+                                                 else return kn
+        getContrFieldType :: a -> ClassName -> FieldName -> TypesystemEnv a Type
+        getContrFieldType i cn fn = getFieldType i (typename2Type cn) fn
+                                    `catchError`
+                                    (\e -> case e of
+                                             FieldDontExit fn _ -> throwError $ MiscError "Illformed class type"
+                                             _ -> throwError e
+                                    )
 
 getClassType :: a -> ClassName -> TypesystemEnv a ClassType
 getClassType i cn = do cte <- ask
@@ -259,17 +253,21 @@ getClassType i cn = do cte <- ask
                          Nothing -> throwError $ ClassDontExit cn i
 
 getFieldType :: a -> Type -> FieldName -> TypesystemEnv a Type
-getFieldType i (TObjId cn) fn = do (CT _ _ _ fm _) <- getClassType i cn
+getFieldType i (TObjId cn) fn = do (CT _ pn _ fm _) <- getClassType i cn
                                    case Map.lookup fn fm of
                                      Just ft -> return ft
-                                     Nothing -> throwError $ FieldDontExit fn i
+                                     Nothing -> if not $ null pn 
+                                                then getFieldType i (typename2Type pn) fn
+                                                else throwError $ FieldDontExit fn i
 getFieldType _ _ _ = throwError $ MiscError "Type is not referring to a class"
 
 getMethodType :: a -> Type -> MethodName -> TypesystemEnv a MethodType
-getMethodType i (TObjId cn) mn = do (CT _ _ _ _ mm) <- getClassType i cn
+getMethodType i (TObjId cn) mn = do (CT _ pn _ _ mm) <- getClassType i cn
                                     case Map.lookup mn mm of
                                       Just mt -> return mt
-                                      Nothing -> throwError $ MethodDontExit mn i
+                                      Nothing -> if not $ null pn
+                                                 then getMethodType i (typename2Type pn) mn
+                                                 else throwError $ MethodDontExit mn i
 getMethodType _ _ _ = throwError $ MiscError "Type is not referring to a class"
 
 
@@ -277,7 +275,8 @@ isSubType :: Type -> Type -> a -> TypesystemEnv a Bool
 isSubType TNull (TObjId _) _ = return True
 isSubType t t' _ | t == t' = return True
 isSubType (TObjId t) b@(TObjId _) i = do (CT _ pn _ _ _) <- getClassType i t
-                                         isSubType (TObjId pn) b i
+                                         if null pn then return False
+                                                    else isSubType (TObjId pn) b i
 isSubType _ _ _  = return False
 
 
@@ -296,7 +295,7 @@ typeUnaryOp op i e expectedts rett = do et <- typeExp e
                                         return rett
 
 typeParameters :: a -> [Type] -> [Type] -> TypesystemEnv a ()
-typeParameters i pst pst' = do let err = throwError $ MethodApplyError i pst pst'
+typeParameters i pst pst' = do let err = throwError $ ParameterTypeError i pst pst'
                                when (length pst /= length pst') err
                                mapM_ (\(t',t) -> (do sub <- isSubType t' t i 
                                                      if not sub then err else return ()
@@ -344,6 +343,6 @@ typeProgram (Program cds) = mapM_ typeClass cds
              return ()
 
 typecheck :: Program a -> BaseComputation a ()
-typecheck p = do cte <- runReaderT (buildClassTypeEnv p) buildInTypes
+typecheck p = do cte <- execStateT (buildClassTypeEnv p) buildInTypes
                  runReaderT (isWellFormed p) cte
                  runReaderT (typeProgram p) cte
