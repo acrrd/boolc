@@ -18,7 +18,7 @@ data Type = TInt | TBool | TString | TVoid | TNull
 
 data ClassType = CT ClassName ClassName [FieldName] FieldsType MethodsType deriving(Eq,Show)
 type FieldsType = Map.Map FieldName Type
-type MethodType = ([Type],Type)
+type MethodType = ([[Type]],Type)
 type MethodsType = Map.Map MethodName MethodType
 type ClassTypeEnv = Map.Map ClassName ClassType
 
@@ -37,7 +37,7 @@ data TypeError a = MultipleError [TypeError a]
                  | InvalidBinOperandsError a Operation Type Type
                  | InvalidUnaOperandsError a Operation Type
                  | IncompatibleType a Type [Type]
-                 | ParameterTypeError a [Type] [Type]
+                 | ParameterTypeError a [[Type]] [Type]
                  | LeftValueError a Type
                  | CyclicInheritance a ClassName
                    deriving (Show)
@@ -105,7 +105,7 @@ buildClassTypeEnv (Program cds) = mapM_ buildProgramEnv' cds
                                                           )
                                                         let rt = typename2Type ret
                                                             pst = getParametersType ps
-                                                        put $ Map.insert mn (pst,rt) ms
+                                                        put $ Map.insert mn ([pst],rt) ms
 
         exec m cn xs = execStateT (runReaderT (mapM_ m xs) cn) Map.empty
 
@@ -140,9 +140,9 @@ isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' p
                                                    lift $ mapM_ checkParameter ps
                                                    let rt = typename2Type ret
                                                        pst = getParametersType ps
-                                                       mt = (pst,rt)
+                                                       mt = ([pst],rt)
                                                    checkMethodParent m mt i
-          
+
         checkField :: FieldDecl a -> CheckMemberEnv a ()
         checkField (FieldDecl i t f) = do lift $ typeExist t i
                                           checkFieldParent f i
@@ -209,21 +209,21 @@ typeExp (Cast i t e) = do lift $ typeExist t i
                           let ct = typename2Type t
                           etct <- lift $ isSubType et ct i
                           ctet <- lift $ isSubType ct et i
-                          if not (etct || ctet) 
+                          if not (etct || ctet)
                             then throwError $ IncompatibleType i et [ct]
                             else return ct
 typeExp (FieldAccess i fn e) = do et <- typeExp e
                                   lift $ getFieldType i et fn
-typeExp (MethodCall i mn ps e) = do et <- typeExp e                             
+typeExp (MethodCall i mn ps e) = do et <- typeExp e
                                     pst' <- mapM typeExp ps
-                                    (pst,rt) <- lift $ getMethodType i et mn
-                                    lift $ typeParameters i pst pst'
+                                    (psts,rt) <- lift $ getMethodType i et mn
+                                    lift $ typeParameters i psts pst'
                                     return rt
 
-typeExp (New i cn ps) = do (CT _ _ kn fm _) <- lift $ getClassType i cn 
+typeExp (New i cn ps) = do (CT _ _ kn fm _) <- lift $ getClassType i cn
                            kt <- lift $ getContructorType i cn
                            pst' <- mapM typeExp ps
-                           lift $ typeParameters i kt pst'
+                           lift $ typeParameters i [kt] pst'
                            return $ typename2Type cn
 typeExp (DeRef e) = do t <- typeExp e
                        case t of
@@ -280,28 +280,31 @@ isSubType (TObjId t) b@(TObjId _) i = do (CT _ pn _ _ _) <- getClassType i t
 isSubType _ _ _  = return False
 
 
-typeBinOp :: Operation -> a -> (Expression a) -> (Expression a) -> [Type] -> Type -> 
+typeBinOp :: Operation -> a -> (Expression a) -> (Expression a) -> [Type] -> Type ->
              TypeExpressionEnv a Type
 typeBinOp op i l r expectedts rett = do lt <- typeExp l
                                         rt <- typeExp r
-                                        when (lt /= rt || (and $ map (lt/=) expectedts)) 
+                                        when (lt /= rt || (and $ map (lt/=) expectedts))
                                           $ throwError $ InvalidBinOperandsError i op lt rt
                                         return rett
 
 typeUnaryOp :: Operation -> a -> (Expression a) -> [Type] -> Type -> TypeExpressionEnv a Type
 typeUnaryOp op i e expectedts rett = do et <- typeExp e
-                                        when ((and $ map (et/=) expectedts)) 
+                                        when ((and $ map (et/=) expectedts))
                                           $ throwError $ InvalidUnaOperandsError i op et
                                         return rett
 
-typeParameters :: a -> [Type] -> [Type] -> TypesystemEnv a ()
-typeParameters i pst pst' = do let err = throwError $ ParameterTypeError i pst pst'
-                               when (length pst /= length pst') err
-                               mapM_ (\(t',t) -> (do sub <- isSubType t' t i 
-                                                     if not sub then err else return ()
-                                                     when (not sub) err
-                                                 )
-                                     ) $ zip pst' pst
+typeParameters :: a -> [[Type]] -> [Type] -> TypesystemEnv a ()
+typeParameters i psts pst' = do if null psts && null pst' then return ()
+                                  else do typed <- foldM (\a pst -> if a then return True
+                                                                         else typeParam i pst pst'
+                                                         ) False psts
+                                          when (not typed) $ throwError $ ParameterTypeError i psts pst'
+  where typeParam :: a -> [Type] -> [Type] -> TypesystemEnv a Bool
+        typeParam i pst pst' =  do if length pst /= length pst' then return False
+                                     else  foldM (\a (t',t) -> if a then isSubType t' t i
+                                                                    else return False     
+                                                 ) True $ zip pst' pst
 
 typeStatement :: (Statement a) -> TypeStatementEnv a ()
 typeStatement (NoOp _) = return ()
@@ -333,9 +336,9 @@ typeProgram :: Program a -> TypesystemEnv a ()
 typeProgram (Program cds) = mapM_ typeClass cds
   where typeClass :: ClassDecl a -> TypesystemEnv a ()
         typeClass (ClassDecl _ cn _ _ ms) = mapM_ (typeMethod cn) ms
-        
+
         typeMethod :: ClassName -> MethodDecl a -> TypesystemEnv a ()
-        typeMethod cn (MethodDecl _ rt _ ps b) = 
+        typeMethod cn (MethodDecl _ rt _ ps b) =
           do cte <- ask
              let pst = foldr (\(ParameterDecl _ t vn) a -> Map.insert vn (TRef $ typename2Type t) a) Map.empty ps
              let lst = Map.insert "this" (typename2Type cn) pst

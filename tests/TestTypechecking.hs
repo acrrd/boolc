@@ -206,13 +206,15 @@ tests_ExpMethodCall tc =
     testCase "methodcall4" $ testTCExpFail tc me me ctea (methodc "g" [] (new "A" [])),
     testCase "methodcall5" $ testTCExpFail tc me me ctea (methodc "m" [I () 1] (new "A" [])),
     testCase "methodcall6" $ testTCExp tc me me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt,
-    testCase "methodcall7" $ testTCExpFail tc me me ctea1 (methodc "m" [] (new "A" []))
+    testCase "methodcall7" $ testTCExpFail tc me me ctea1 (methodc "m" [] (new "A" [])),
+    testCase "methodcall8" $ testTCExp tc me me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt
   ]
   where me = Map.empty
         new = New () 
         methodc = MethodCall ()
         mt1 = Map.insert "m" ([],TInt) me
-        mt2 = Map.insert "m" ([TInt],TInt) me
+        mt2 = Map.insert "m" ([[TInt]],TInt) me
+        mt3 = Map.insert "m" ([[TBool],[TInt]],TInt) me
         ctea = Map.insert "A" (CT "A" "" [] me mt1) me
         cteb = Map.insert "B" (CT "B" "A" [] me  me) ctea
         ctec = Map.insert "C" (CT "C" "B" [] me  mt1) cteb
@@ -248,7 +250,7 @@ tests_BuildCT tc =
         pd = ParameterDecl ()
         me = Map.empty
         ft = Map.insert "f" (TRef TInt) me
-        mt = Map.insert "m" ([TInt],TInt) me
+        mt = Map.insert "m" ([[TInt]],TInt) me
         cte1 = Map.insert "A" (CT "A" "Object" [] me me) me
         cte2 = Map.insert "B" (CT "B" "Object" [] me me) cte1
         cte3 = Map.insert "A" (CT "A" "Object" ["f"] ft me) me
