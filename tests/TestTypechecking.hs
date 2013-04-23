@@ -147,12 +147,12 @@ tests_ExpNew tc =
   ]
   where me = Map.empty
         new = New ()
-        ctea = Map.insert "A" (CT "A" "" [] me me) me
+        ctea = Map.insert "A" (CT "A" "" [] me me []) me
         fB = Map.insert "f" TInt me
         fC = Map.insert "g" TBool me
-        cteb = Map.insert "B" (CT "B" "" ["f"] fB me) me
-        ctec = Map.insert "C" (CT "C" "B" ["g"] fC me) cteb
-        cteill = Map.insert "I" (CT "B" "" ["f"] me me) me
+        cteb = Map.insert "B" (CT "B" "" ["f"] fB me []) me
+        ctec = Map.insert "C" (CT "C" "B" ["g"] fC me []) cteb
+        cteill = Map.insert "I" (CT "B" "" ["f"] me me []) me
         
 
 tests_ExpCast tc =
@@ -169,10 +169,10 @@ tests_ExpCast tc =
         int = (I () 0)
         bool = (B () True)
         new c = New () c []
-        ctec = Map.insert "C" (CT "C" "" [] me me) me
-        ctebc = Map.insert "B" (CT "B" "C" [] me me) ctec
-        cteabc = Map.insert "A" (CT "A" "B" [] me me) ctebc 
-        ctedc = Map.insert "D" (CT "D" "C" [] me me) cteabc
+        ctec = Map.insert "C" (CT "C" "" [] me me []) me
+        ctebc = Map.insert "B" (CT "B" "C" [] me me []) ctec
+        cteabc = Map.insert "A" (CT "A" "B" [] me me []) ctebc 
+        ctedc = Map.insert "D" (CT "D" "C" [] me me []) cteabc
         
 
 
@@ -195,8 +195,8 @@ tests_ExpFieldAccess tc =
         new = New () 
         fielda = FieldAccess ()
         ft = Map.insert "f" TInt me
-        ctea = Map.insert "A" (CT "A" "" ["f"] ft me) me
-        cteb = Map.insert "B" (CT "B" "A" [] me  me) ctea
+        ctea = Map.insert "A" (CT "A" "" ["f"] ft me []) me
+        cteb = Map.insert "B" (CT "B" "A" [] me  me []) ctea
 
 tests_ExpMethodCall tc =
   [
@@ -215,10 +215,10 @@ tests_ExpMethodCall tc =
         mt1 = Map.insert "m" ([],TInt) me
         mt2 = Map.insert "m" ([[TInt]],TInt) me
         mt3 = Map.insert "m" ([[TBool],[TInt]],TInt) me
-        ctea = Map.insert "A" (CT "A" "" [] me mt1) me
-        cteb = Map.insert "B" (CT "B" "A" [] me  me) ctea
-        ctec = Map.insert "C" (CT "C" "B" [] me  mt1) cteb
-        ctea1 = Map.insert "A" (CT "A" "" [] me  mt2) me
+        ctea = Map.insert "A" (CT "A" "" [] me mt1 []) me
+        cteb = Map.insert "B" (CT "B" "A" [] me  me []) ctea
+        ctec = Map.insert "C" (CT "C" "B" [] me  mt1 []) cteb
+        ctea1 = Map.insert "A" (CT "A" "" [] me  mt2 []) me
 
 {--
 data ParameterDecl a = ParameterDecl a TypeName VarName deriving(Show,Eq)
@@ -251,14 +251,16 @@ tests_BuildCT tc =
         me = Map.empty
         ft = Map.insert "f" (TRef TInt) me
         mt = Map.insert "m" ([[TInt]],TInt) me
-        cte1 = Map.insert "A" (CT "A" "Object" [] me me) me
-        cte2 = Map.insert "B" (CT "B" "Object" [] me me) cte1
-        cte3 = Map.insert "A" (CT "A" "Object" ["f"] ft me) me
-        cte4 = Map.insert "A" (CT "A" "Object" [] me mt) me
-        cte5 = Map.insert "A" (CT "A" "Object" ["f"] ft mt) me
-        cte6 = Map.insert "A" (CT "A" "B" [] me me) $ Map.insert "B" (CT "B" "C" [] me me) $ Map.insert "C" (CT "C" "Object" [] me me) me
+        cte1 = Map.insert "A" (CT "A" "Object" [] me me []) me
+        cte2 = Map.insert "B" (CT "B" "Object" [] me me []) cte1
+        cte3 = Map.insert "A" (CT "A" "Object" ["f"] ft me []) me
+        cte4 = Map.insert "A" (CT "A" "Object" [] me mt []) me
+        cte5 = Map.insert "A" (CT "A" "Object" ["f"] ft mt []) me
+        cte6 = Map.insert "A" (CT "A" "B" [] me me []) $ Map.insert "B" (CT "B" "C" [] me me []) $ Map.insert "C" (CT "C" "Object" [] me me []) me
 
-tests_IsWellFormed tc = 
+
+
+tests_IsWellFormed tc =
   [
     testCase "IWF1" $ testTCFail tc $ p [(cd "A" "A" [] [])],
     testCase "IWF2" $ testTCFail tc $ p [(cd "A" "B" [] []),(cd "B" "C" [] []),(cd "C" "A" [] [])],
@@ -266,7 +268,8 @@ tests_IsWellFormed tc =
     testCase "IWF4" $ testTCFail tc $ p [(cd "A" "B" [(fd "int" "f")] []),(cd "B" "Object" [(fd "bool" "f")] [])],
     testCase "IWF5" $ testTC tc $ p [(cd "A" "B" [] [(md "int" "m" [] noop)]),(cd "B" "Object" [] [(md "int" "m" [] noop)])],
     testCase "IWF6" $ testTCFail tc $ p [(cd "A" "B" [] [(md "bool" "m" [] noop)]),(cd "B" "Object" [] [(md "int" "m" [] noop)])],
-    testCase "IWF7" $ testTCFail tc $ p [(cd "A" "B" [] [(md "int" "m" [pd "int" "x"] noop)]),(cd "B" "Object" [] [(md "int" "m" [] noop)])]
+    testCase "IWF7" $ testTCFail tc $ p [(cd "A" "B" [] [(md "int" "m" [pd "int" "x"] noop)]),(cd "B" "Object" [] [(md "int" "m" [] noop)])],
+    testCase "IWF8" $ testTCFail tc $ p [(cd "A" "System" [] [])]
   ]
   where p = Program
         cd = ClassDecl ()
