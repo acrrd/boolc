@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeSynonymInstances,FlexibleInstances #-}
+
 module Typesystem where
 
 import Ast
@@ -15,6 +17,39 @@ data Type = TInt | TBool | TString | TVoid | TNull
           | TObjId ClassName | TRef Type
           deriving (Eq,Show)
 
+type ExpressionT a = Expression (a,Type)
+type StatementT a = Statement (a,Type)
+type ParameterDeclT a = ParameterDecl (a,Type)
+type FieldDeclT a = FieldDecl (a,Type)
+type MethodDeclT a = MethodDecl (a,Type)
+type ClassDeclT a = ClassDecl (a,Type)
+type ProgramT a = Program (a,Type)
+
+{--
+class TypeAnnotated a where
+  getType :: a -> Type
+
+instance TypeAnnotated (ExpressionT a) where
+  getType (I (_,t) _) = t
+  getType (B (_,t) _) = t
+  getType (S (_,t) _) = t
+  getType (Void (_,t)) = t
+  getType (Null (_,t)) = t
+  getType (Var (_,t) x) = t
+  getType (Additive (_,t) _ _ _) = t
+  getType (Multiplicative (_,t) _ _ _) = t
+  getType (Relational (_,t) _ _ _) = t
+  getType (Equality (_,t) _ _ _) = t
+  getType (Boolean (_,t) _ _ _) = t
+  getType (Negative (_,t) _) = t
+  getType (Not (_,t) _) = t
+  getType (Cast (_,t) _ _) = t
+  getType (FieldAccess (_,t) fn e) = t
+  getType (MethodCall (_,t) mn ps e) = t
+  getType (New (_,t) _ _) = t
+  getType (DeRef (_,t) _) = t
+--}
+  
 data Modifier = Final deriving(Eq,Show)
 
 data ClassType = CT ClassName ClassName [FieldName] FieldsType MethodsType [Modifier] deriving(Eq,Show)
@@ -185,51 +220,77 @@ buildConstrArgs cte = Map.map (buildConstrArgs' cte) cte
             then case Map.lookup pn cte of
                   Just pct -> let (CT _ _ fts' _ _ _) = buildConstrArgs' cte pct in (CT cn pn (fts'++fts) fm mm mod)
                   Nothing ->  (CT cn pn fts fm mm mod) -- should never happen, run isWellFormed first!!
-            else (CT cn pn fts fm mm mod)
-                                                                
-typeExp :: Expression a ->  TypeExpressionEnv a Type
-typeExp (I _ _) = return TInt
-typeExp (B _ _) = return TBool
-typeExp (S _ _) = return TString
-typeExp (Void _) = return TVoid
-typeExp (Null _) = return TNull
+            else (CT cn pn fts fm mm mod) 
+
+getExpType :: ExpressionT a -> Type
+getExpType (I (_,t) _) = t
+getExpType (B (_,t) _) = t
+getExpType (S (_,t) _) = t
+getExpType (Void (_,t)) = t
+getExpType (Null (_,t)) = t
+getExpType (Var (_,t) x) = t
+getExpType (Additive (_,t) _ _ _) = t
+getExpType (Multiplicative (_,t) _ _ _) = t
+getExpType (Relational (_,t) _ _ _) = t
+getExpType (Equality (_,t) _ _ _) = t
+getExpType (Boolean (_,t) _ _ _) = t
+getExpType (Negative (_,t) _) = t
+getExpType (Not (_,t) _) = t
+getExpType (Cast (_,t) _ _) = t
+getExpType (FieldAccess (_,t) fn e) = t
+getExpType (MethodCall (_,t) mn ps e) = t
+getExpType (New (_,t) _ _) = t
+getExpType (DeRef (_,t) _) = t
+
+
+typeExp :: Expression a ->  TypeExpressionEnv a (ExpressionT a)
+typeExp (I i v) = return $ I (i,TInt) v
+typeExp (B i v) = return $ B (i,TBool) v
+typeExp (S i v) = return $ S (i,TString) v
+typeExp (Void i) = return $ Void (i,TVoid)
+typeExp (Null i) = return $ Null (i,TNull)
 typeExp (Var i x) = do (gst,lst) <- get
                        case Map.lookup x lst of
-                         Just t -> return t
+                         Just t -> return $ Var (i,t) x
                          Nothing -> case Map.lookup x gst of
-                                     Just t -> return t
+                                     Just t -> return $ Var (i,t) x
                                      Nothing -> throwError $ NotDeclaredVar x i
-typeExp (Additive i op l r) = typeBinOp op i l r [TInt] TInt
-typeExp (Multiplicative i op l r) = typeBinOp op i l r [TInt] TInt
-typeExp (Relational i op l r) = typeBinOp op i l r [TInt] TBool
-typeExp (Equality i op l r) = typeBinOp op i l r [TInt,TBool] TBool
-typeExp (Boolean i op l r) = typeBinOp op i l r [TBool] TBool
-typeExp (Negative i e) = typeUnaryOp "-" i e [TInt] TInt
-typeExp (Not i e) = typeUnaryOp "!" i e [TBool] TBool
+typeExp (Additive i op l r) = typeBinOp op i Additive l r [TInt] TInt
+typeExp (Multiplicative i op l r) = typeBinOp op i Multiplicative l r [TInt] TInt
+typeExp (Relational i op l r) = typeBinOp op i Relational l r [TInt] TBool
+typeExp (Equality i op l r) = typeBinOp op i Equality l r [TInt,TBool] TBool
+typeExp (Boolean i op l r) = typeBinOp op i Boolean l r [TBool] TBool
+typeExp (Negative i e) = typeUnaryOp "-" i Negative e [TInt] TInt
+typeExp (Not i e) = typeUnaryOp "!" i Not e [TBool] TBool
 typeExp (Cast i t e) = do lift $ typeExist t i
-                          et <- typeExp e
+                          ee <- typeExp e
+                          let et = getExpType ee
                           let ct = typename2Type t
                           etct <- lift $ isSubType et ct i
                           ctet <- lift $ isSubType ct et i
                           if not (etct || ctet)
                             then throwError $ IncompatibleType i et [ct]
-                            else return ct
-typeExp (FieldAccess i fn e) = do et <- typeExp e
-                                  lift $ getFieldType i et fn
-typeExp (MethodCall i mn ps e) = do et <- typeExp e
-                                    pst' <- mapM typeExp ps
+                            else return $ Cast (i,ct) t ee
+typeExp (FieldAccess i fn e) = do ee <- typeExp e
+                                  let et = getExpType ee
+                                  ft <- lift $ getFieldType i et fn
+                                  return $ FieldAccess (i,ft) fn ee
+typeExp (MethodCall i mn ps e) = do ee <- typeExp e
+                                    let et = getExpType ee
+                                    ps' <- mapM typeExp ps
                                     (psts,rt) <- lift $ getMethodType i et mn
-                                    lift $ typeParameters i psts pst'
-                                    return rt
+                                    lift $ typeParameters i psts ps'
+                                    return $ MethodCall (i,rt) mn ps' ee
 
 typeExp (New i cn ps) = do (CT _ _ kn fm _ _) <- lift $ getClassType i cn
                            kt <- lift $ getContructorType i cn
-                           pst' <- mapM typeExp ps
-                           lift $ typeParameters i [kt] pst'
-                           return $ typename2Type cn
-typeExp (DeRef _ e) = do t <- typeExp e
+                           ps' <- mapM typeExp ps
+                           lift $ typeParameters i [kt] ps'
+                           return $ New (i,typename2Type cn) cn ps'
+typeExp (DeRef i e) = do ee <- typeExp e
+                         let t = getExpType ee
                          case t of
-                           TRef t' -> return t'
+                           TRef t' -> return $ DeRef (i,t') ee
                            _ -> throwError $ MiscError "DeRef applied to a non ref"
 
 getContructorType :: a -> ClassName -> TypesystemEnv a [Type]
@@ -282,78 +343,101 @@ isSubType (TObjId t) b@(TObjId _) i = do (CT _ pn _ _ _ _) <- getClassType i t
 isSubType _ _ _  = return False
 
 
-typeBinOp :: Operation -> a -> (Expression a) -> (Expression a) -> [Type] -> Type ->
-             TypeExpressionEnv a Type
-typeBinOp op i l r expectedts rett = do lt <- typeExp l
-                                        rt <- typeExp r
-                                        when (lt /= rt || (and $ map (lt/=) expectedts))
-                                          $ throwError $ InvalidBinOperandsError i op lt rt
-                                        return rett
+typeBinOp :: Operation -> a -> ((a,Type) -> Operation -> ExpressionT a -> ExpressionT a -> ExpressionT a) ->
+             (Expression a) -> (Expression a) -> 
+             [Type] -> Type -> TypeExpressionEnv a (ExpressionT a)
+typeBinOp op i n l r expectedts rett = do le <- typeExp l
+                                          re <- typeExp r
+                                          let lt = getExpType le
+                                          let rt = getExpType re
+                                          when (lt /= rt || (and $ map (lt/=) expectedts))
+                                            $ throwError $ InvalidBinOperandsError i op lt rt
+                                          return $ n (i,rett) op le re
 
-typeUnaryOp :: Operation -> a -> (Expression a) -> [Type] -> Type -> TypeExpressionEnv a Type
-typeUnaryOp op i e expectedts rett = do et <- typeExp e
-                                        when ((and $ map (et/=) expectedts))
-                                          $ throwError $ InvalidUnaOperandsError i op et
-                                        return rett
+typeUnaryOp :: Operation -> a -> ((a,Type) -> ExpressionT a -> ExpressionT a) ->
+               (Expression a) -> [Type] -> Type -> TypeExpressionEnv a (ExpressionT a)
+typeUnaryOp op i n e expectedts rett = do ee <- typeExp e
+                                          let et = getExpType ee
+                                          when ((and $ map (et/=) expectedts))
+                                            $ throwError $ InvalidUnaOperandsError i op et
+                                          return $ n (i,rett) ee
 
-typeParameters :: a -> [[Type]] -> [Type] -> TypesystemEnv a ()
-typeParameters i psts pst' = do if null psts && null pst' then return ()
-                                  else do typed <- foldM (\a pst -> if a then return True
-                                                                         else typeParam i pst pst'
-                                                         ) False psts
-                                          when (not typed) $ throwError $ ParameterTypeError i psts pst'
+typeParameters :: a -> [[Type]] -> [ExpressionT a] -> TypesystemEnv a ()
+typeParameters i psts ps' = do if null psts && null ps' then return ()
+                                 else do let pst' = map getExpType ps'
+                                         typed <- foldM (\a pst -> if a then return True
+                                                                        else typeParam i pst pst'
+                                                        ) False psts
+                                         when (not typed) $ throwError $ ParameterTypeError i psts pst'
   where typeParam :: a -> [Type] -> [Type] -> TypesystemEnv a Bool
         typeParam i pst pst' =  do if length pst /= length pst' then return False
-                                     else  foldM (\a (t',t) -> if a then isSubType t' t i
+                                     else  foldM (\a (t',t) -> if a then isSubType (t') t i
                                                                     else return False     
                                                  ) True $ zip pst' pst
 
-typeStatement :: (Statement a) -> TypeStatementEnv a ()
-typeStatement (NoOp _) = return ()
+typeStatement :: (Statement a) -> TypeStatementEnv a (StatementT a)
+typeStatement (NoOp i) = return $ NoOp (i,TVoid)
 typeStatement (Declaration i t vn) = do lift $ lift $ typeExist t i
                                         (gst,lst) <- lift get
                                         when (Map.member vn lst) $ throwError $ DuplicateVariable vn i
-                                        lift $ put (gst, Map.insert vn (TRef $ typename2Type t) lst)
-typeStatement (ExpStm e) = (lift $ typeExp e) >> return ()
-typeStatement (Assign i e e') = do et <- lift $ typeExp e
-                                   et' <- lift $ typeExp e'
+                                        let tt = TRef $ typename2Type t
+                                        lift $ put (gst, Map.insert vn tt lst)
+                                        return $ Declaration (i,tt) t vn
+typeStatement (ExpStm e) = liftM ExpStm (lift $ typeExp e)
+typeStatement (Assign i e e') = do ee <- lift $ typeExp e
+                                   ee' <- lift $ typeExp e'
+                                   let et = getExpType ee
+                                   let et' = getExpType ee'
                                    case et' of
                                      TRef _ -> throwError $ MiscError "Did you run desugar?"
                                      _ -> case et of
                                             TRef t -> do sub <- lift $ lift $ isSubType et' t i
                                                          when (not sub) $ throwError $ IncompatibleType i et' [t]
+                                                         return $ Assign (i,TVoid) ee ee'
                                             _ -> throwError $ LeftValueError i et
-typeStatement (If i ce st se) = do cet <- lift $ typeExp ce
+typeStatement (If i ce st se) = do ce' <- lift $ typeExp ce
+                                   let cet = getExpType ce'
                                    when (cet /= TBool) $ throwError $ IncompatibleType i cet [TBool]
-                                   typeStatement st
-                                   typeStatement se
-typeStatement (Return i e ) = do et <- lift $ typeExp e
+                                   st' <- typeStatement st
+                                   se' <- typeStatement se
+                                   return $ If (i,TVoid) ce' st' se'
+typeStatement (Return i e ) = do ee <- lift $ typeExp e
+                                 let et = getExpType ee
                                  rt <- ask
                                  sub <- lift $ lift $ isSubType et rt i
                                  when (not sub) $ throwError $ IncompatibleType i et [rt]
-typeStatement (Block ss) = mapM_ typeStatement ss
+                                 return $ Return (i,rt) ee
+typeStatement (Block ss) = liftM Block $ mapM typeStatement ss
 
 
-typeProgram :: Program a -> TypesystemEnv a ()
-typeProgram (Program cds) = mapM_ typeClass cds
-  where typeClass :: ClassDecl a -> TypesystemEnv a ()
-        typeClass (ClassDecl i cn pn _ ms) = do checkParentFinal i cn pn
-                                             
-                                                mapM_ (typeMethod cn) ms
+typeProgram :: Program a -> TypesystemEnv a (ProgramT a)
+typeProgram (Program cds) = liftM Program $ mapM typeClass cds
+  where typeClass :: ClassDecl a -> TypesystemEnv a (ClassDeclT a)
+        typeClass (ClassDecl i cn pn fs ms) = do checkParentFinal i cn pn
+                                                 let cnt = typename2Type cn
+                                                 let fs' = mapM (\(FieldDecl i tn n) -> 
+                                                                    do t <- getFieldType i cnt n
+                                                                       return $ FieldDecl (i,t) tn n
+                                                                ) fs
+                                                 let ms' = mapM (typeMethod cn) ms
+                                                 liftM2 (ClassDecl (i,cnt) cn pn) fs' ms'
+                                                
 
         checkParentFinal :: a -> ClassName -> ClassName -> TypesystemEnv a ()
         checkParentFinal i cn pn = do (CT _ _ _ _ _ mod) <- getClassType i pn
                                       when (any (==Final) mod) $ throwError $ FinalParent i cn pn
 
-        typeMethod :: ClassName -> MethodDecl a -> TypesystemEnv a ()
-        typeMethod cn (MethodDecl _ rt _ ps b) =
+        typeMethod :: ClassName -> MethodDecl a -> TypesystemEnv a (MethodDeclT a)
+        typeMethod cn (MethodDecl i rtn mn ps b) =
           do cte <- ask
-             let pst = foldr (\(ParameterDecl _ t vn) a -> Map.insert vn (TRef $ typename2Type t) a) Map.empty ps
+             let ps' = map (\(ParameterDecl i t vn) -> ParameterDecl (i,typename2Type t) t vn) ps
+             let pst = foldr (\(ParameterDecl (_,t) _ vn) a -> Map.insert vn (TRef t) a) Map.empty ps'
              let lst = Map.insert "this" (typename2Type cn) pst
-             runStateT (runReaderT (typeStatement b) (typename2Type rt)) (globalSymbols,lst)
-             return ()
+             let rt = typename2Type rtn
+             let b' = evalStateT (runReaderT (typeStatement b) rt) (globalSymbols,lst)
+             liftM (MethodDecl (i,rt) rtn mn ps') b'
 
-typecheck :: Program a -> BaseComputation a ()
+typecheck :: Program a -> BaseComputation a (ProgramT a)
 typecheck p = do cte <- execStateT (buildClassTypeEnv p) buildInTypes
                  runReaderT (isWellFormed p) cte
                  runReaderT (typeProgram p) cte

@@ -34,21 +34,21 @@ typecheckingTests =
          ]
   ]
 
-testTCExp :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a Type) -> 
+testTCExp :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
              GlobalSymTable -> LocalSymTable -> ClassTypeEnv ->
              Expression a -> Type -> Assertion
 testTCExp tc gst lst cte e t = 
   case runReaderT (evalStateT (tc e) (gst,lst)) cte of
     Left err -> assertFailure $ show err
-    Right t' -> t' @?= t
+    Right t' -> getExpType t' @?= t
 
-testTCExpFail :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a Type) -> 
+testTCExpFail :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
                  GlobalSymTable -> LocalSymTable -> ClassTypeEnv ->
                  Expression a -> Assertion
 testTCExpFail tc gst lst cte e = 
   case runReaderT (evalStateT (tc e) (gst,lst)) cte of
     Left err -> assertBool "" True
-    Right t' -> assertFailure $ "This test should fail but got: " ++ show t'
+    Right t' -> assertFailure $ "This test should fail but got: " ++ (show $ getExpType t')
 
 testBCTE :: (Eq a, Show a) => (Program a -> BuildClassEnvComp a ()) -> 
             Program a -> ClassTypeEnv -> Assertion
@@ -65,25 +65,25 @@ testBCTEFail tc p =
     Right t' -> assertFailure $ "This test should fail but got: " ++ show t'
 
 
-testTC :: (Eq a, Show a) => (Program a ->  BaseComputation a ()) -> 
+testTC :: (Eq a, Show a) => (Program a ->  BaseComputation a (ProgramT a)) -> 
           Program a -> Assertion
 testTC tc p = 
   case tc p of
     Left err -> assertFailure $ show err
-    Right t' -> t' @?= ()
+    Right t' -> fmap (const ()) t' @?= fmap (const ()) p
 
-testTCFail :: (Eq a, Show a) => (Program a ->  BaseComputation a ()) -> 
+testTCFail :: (Eq a, Show a) => (Program a ->  BaseComputation a (ProgramT a)) -> 
               Program a -> Assertion
 testTCFail tc p = 
   case tc p of
     Left err -> assertBool "" True
     Right t' -> assertFailure $ "This test should fail but got: " ++ show t'
 
-testTCExpEmpty :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a Type) -> 
+testTCExpEmpty :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
                   Expression a -> Type -> Assertion
 testTCExpEmpty tc = let me = Map.empty in testTCExp tc me me me
 
-testTCExpEmptyFail :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a Type) -> 
+testTCExpEmptyFail :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
                       Expression a -> Assertion
 testTCExpEmptyFail tc = let me = Map.empty in testTCExpFail tc me me me
 
