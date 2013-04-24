@@ -43,10 +43,10 @@ desugar (Program cds) = Program $ map desugarCD cds
         desugarExp (Negative i e) = liftM (Negative i) $ desugarExp e
         desugarExp (Not i e) = liftM (Not i) $ desugarExp e
         desugarExp (Cast i t e) = liftM (Cast i t) $ desugarExp e
-        desugarExp (FieldAccess i fn e) = liftM (DeRef . (FieldAccess i fn)) $ desugarExp e
+        desugarExp (FieldAccess i fn e) = liftM (DeRef i . (FieldAccess i fn)) $ desugarExp e
         desugarExp (MethodCall i mn ps e) = liftM2 (MethodCall i mn) (mapM desugarExp ps) (desugarExp e)
         desugarExp (New i t ps) = liftM (New i t) $ mapM desugarExp ps
         desugarExp v@(Var i vn) = do s <- get
-                                     if (Set.member vn s) then return $ DeRef v 
+                                     if (Set.member vn s) then return $ DeRef i v 
                                                           else return v
         desugarExp e = return e

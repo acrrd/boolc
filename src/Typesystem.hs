@@ -228,10 +228,10 @@ typeExp (New i cn ps) = do (CT _ _ kn fm _ _) <- lift $ getClassType i cn
                            pst' <- mapM typeExp ps
                            lift $ typeParameters i [kt] pst'
                            return $ typename2Type cn
-typeExp (DeRef e) = do t <- typeExp e
-                       case t of
-                         TRef t' -> return t'
-                         _ -> throwError $ MiscError "DeRef applied to a non ref"
+typeExp (DeRef _ e) = do t <- typeExp e
+                         case t of
+                           TRef t' -> return t'
+                           _ -> throwError $ MiscError "DeRef applied to a non ref"
 
 getContructorType :: a -> ClassName -> TypesystemEnv a [Type]
 getContructorType i cn =  do kn <- getContrField i cn

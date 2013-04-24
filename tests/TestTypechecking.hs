@@ -178,8 +178,8 @@ tests_ExpCast tc =
 
 tests_ExpDeRef tc =
   [
-    testCase "deref1" $ testTCExp tc me lst1 me (DeRef $ Var () "a") TInt,
-    testCase "deref2" $ testTCExpFail tc me lst2 me (DeRef $ Var () "a")
+    testCase "deref1" $ testTCExp tc me lst1 me (DeRef () $ Var () "a") TInt,
+    testCase "deref2" $ testTCExpFail tc me lst2 me (DeRef () $ Var () "a")
   ]
   where me = Map.empty
         lst1 = Map.insert "a" (TRef TInt) Map.empty
