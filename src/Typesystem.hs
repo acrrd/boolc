@@ -1,7 +1,6 @@
 module Typesystem where
 
 import Ast
-import Parser (ExpressionSP,StatementSP,FieldDeclSP,MethodDeclSP,ClassDeclSP,ProgramSP)
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
