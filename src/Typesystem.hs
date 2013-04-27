@@ -77,6 +77,7 @@ data TypeError a = MultipleError [TypeError a]
                  | LeftValueError a Type
                  | CyclicInheritance a ClassName
                  | FinalParent a ClassName ClassName
+                 | NotDereferencable a Type
                    deriving (Show)
 
 instance Error (TypeError a) where
@@ -291,7 +292,7 @@ typeExp (DeRef i e) = do ee <- typeExp e
                          let t = getExpType ee
                          case t of
                            TRef t' -> return $ DeRef (i,t') ee
-                           _ -> throwError $ MiscError "DeRef applied to a non ref"
+                           _ -> throwError $ NotDereferencable i t
 
 getContructorType :: a -> ClassName -> TypesystemEnv a [Type]
 getContructorType i cn =  do kn <- getContrField i cn
