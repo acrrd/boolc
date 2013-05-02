@@ -3,6 +3,7 @@ module Main(main) where
 import Parser
 import AstUtils
 import Typesystem
+import ToLLVM
 
 import System.Environment
 import System.Exit (exitSuccess)
