@@ -7,7 +7,7 @@ type FieldName = String
 type MethodName = String
 type ClassName = String
 data Expression a = I a Int | B a Bool | S a String| Var a VarName
-                  | Null a | Void a
+                  | ClassSymbol a ClassName | Null a | Void a
                   | Additive a Operation (Expression a) (Expression a)
                   | Multiplicative a Operation (Expression a) (Expression a)
                   | Relational a Operation (Expression a) (Expression a)
@@ -18,6 +18,7 @@ data Expression a = I a Int | B a Bool | S a String| Var a VarName
                   | Cast a TypeName (Expression a)
                   | FieldAccess a FieldName (Expression a)
                   | MethodCall a MethodName [Expression a] (Expression a)
+                  | StaticMethodCall a MethodName [Expression a] ClassName
                   | New a TypeName [Expression a]
                   | DeRef a (Expression a)
                   deriving(Show,Eq)

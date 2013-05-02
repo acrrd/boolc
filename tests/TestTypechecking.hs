@@ -207,10 +207,13 @@ tests_ExpMethodCall tc =
     testCase "methodcall5" $ testTCExpFail tc me me ctea (methodc "m" [I () 1] (new "A" [])),
     testCase "methodcall6" $ testTCExp tc me me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt,
     testCase "methodcall7" $ testTCExpFail tc me me ctea1 (methodc "m" [] (new "A" [])),
-    testCase "methodcall8" $ testTCExp tc me me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt
+    testCase "methodcall8" $ testTCExp tc me me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt,
+    testCase "methodcall9" $ testTCExp tc me me ctes1 (methodc "m" [] (var "S")) TInt,
+    testCase "methodcall10" $ testTCExpFail tc me me ctes2 (methodc "m" [] (var "S"))
   ]
   where me = Map.empty
         new = New () 
+        var = Var ()
         methodc = MethodCall ()
         mt1 = Map.insert "m" ([],TInt) me
         mt2 = Map.insert "m" ([[TInt]],TInt) me
@@ -219,6 +222,8 @@ tests_ExpMethodCall tc =
         cteb = Map.insert "B" (CT "B" "A" [] me  me []) ctea
         ctec = Map.insert "C" (CT "C" "B" [] me  mt1 []) cteb
         ctea1 = Map.insert "A" (CT "A" "" [] me  mt2 []) me
+        ctes1 = Map.insert "S" (CT "S" "" [] me  mt1 [Static]) me
+        ctes2 = Map.insert "S" (CT "S" "" [] me  mt1 []) me
 
 {--
 data ParameterDecl a = ParameterDecl a TypeName VarName deriving(Show,Eq)
