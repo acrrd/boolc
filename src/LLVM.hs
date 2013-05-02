@@ -35,14 +35,22 @@ functionType varargs retType paramTypes =
         return $ FFI.functionType retType ptr (fromIntegral len)
 	       	 		  (fromBool varargs)
 
-structTypeNamed :: String -> [Type] -> Bool -> IO Type
-structTypeNamed name types packed = do
+structCreateNamed :: String -> IO Type
+structCreateNamed name = do
   withCString name $ \namePtr -> do
     context <- FFI.getGlobalContext
-    st <- FFI.structCreateNamed context namePtr 
+    FFI.structCreateNamed context namePtr
+
+structSetBody :: Type -> [Type] -> Bool -> IO ()
+structSetBody struct types packed = do
     withArrayLen types $ \len typesPtr -> do 
-      FFI.structSetBody st typesPtr (fromIntegral len) (if packed then 1 else 0)
-      return st
+      FFI.structSetBody struct typesPtr (fromIntegral len) (if packed then 1 else 0)
+
+structTypeNamed :: String -> [Type] -> Bool -> IO Type
+structTypeNamed name types packed = do
+  struct <- structCreateNamed name
+  structSetBody struct types packed
+  return struct
 
 -- ~ From LLVM.Core.Util
 writeBitcodeToFile :: String -> Module -> IO ()

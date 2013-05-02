@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeSynonymInstances,FlexibleInstances #-}
-
 module Typesystem where
 
 import Ast
@@ -24,31 +22,6 @@ type FieldDeclT a = FieldDecl (a,Type)
 type MethodDeclT a = MethodDecl (a,Type)
 type ClassDeclT a = ClassDecl (a,Type)
 type ProgramT a = Program (a,Type)
-
-{--
-class TypeAnnotated a where
-  getType :: a -> Type
-
-instance TypeAnnotated (ExpressionT a) where
-  getType (I (_,t) _) = t
-  getType (B (_,t) _) = t
-  getType (S (_,t) _) = t
-  getType (Void (_,t)) = t
-  getType (Null (_,t)) = t
-  getType (Var (_,t) x) = t
-  getType (Additive (_,t) _ _ _) = t
-  getType (Multiplicative (_,t) _ _ _) = t
-  getType (Relational (_,t) _ _ _) = t
-  getType (Equality (_,t) _ _ _) = t
-  getType (Boolean (_,t) _ _ _) = t
-  getType (Negative (_,t) _) = t
-  getType (Not (_,t) _) = t
-  getType (Cast (_,t) _ _) = t
-  getType (FieldAccess (_,t) fn e) = t
-  getType (MethodCall (_,t) mn ps e) = t
-  getType (New (_,t) _ _) = t
-  getType (DeRef (_,t) _) = t
---}
   
 data Modifier = Final | Static deriving(Eq,Show)
 
@@ -110,7 +83,7 @@ getParametersType = map (\(ParameterDecl _ t _) -> typename2Type t)
 
 buildInTypes :: ClassTypeEnv
 buildInTypes = Map.insert "Object" (CT "Object" "" [] me me []) $
-               Map.insert "System" (CT "System" "" [] me me [Final]) me
+               Map.insert "System" (CT "System" "" [] me me [Final,Static]) me
   where me = Map.empty
 
 globalSymbols :: Map.Map VarName Type
@@ -465,7 +438,7 @@ typeProgram (Program cds) = liftM Program $ mapM typeClass cds
              mapM_ (\(ParameterDecl i t _) -> checkNotStatic i t cte) ps
              let ps' = map (\(ParameterDecl i t vn) -> ParameterDecl (i,typename2Type t) t vn) ps
              let pst = foldr (\(ParameterDecl (_,t) _ vn) a -> Map.insert vn (TRef t) a) Map.empty ps'
-             let lst = Map.insert "this" (typename2Type cn) pst
+             let lst = Map.insert "this" (typename2Type cn) $ pst
              let rt = typename2Type rtn
              let b' = evalStateT (runReaderT (typeStatement b) rt) (globalSymbols,lst)
              liftM (MethodDecl (i,rt) rtn mn ps') b'
@@ -477,7 +450,8 @@ typeProgram (Program cds) = liftM Program $ mapM typeClass cds
                    Just (CT _ _ _ _ _ mods) -> do when (any (==Static) mods) $ throwError $ StaticClass i cn
                                                   return ()
 
-typecheck :: Program a -> BaseComputation a (ProgramT a)
+typecheck :: Program a -> BaseComputation a (ProgramT a,ClassTypeEnv)
 typecheck p = do cte <- execStateT (buildClassTypeEnv p) buildInTypes
                  runReaderT (isWellFormed p) cte
-                 runReaderT (typeProgram p) cte
+                 p' <- runReaderT (typeProgram p) cte
+                 return (p',cte)

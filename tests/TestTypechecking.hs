@@ -65,14 +65,14 @@ testBCTEFail tc p =
     Right t' -> assertFailure $ "This test should fail but got: " ++ show t'
 
 
-testTC :: (Eq a, Show a) => (Program a ->  BaseComputation a (ProgramT a)) -> 
+testTC :: (Eq a, Show a) => (Program a ->  BaseComputation a (ProgramT a,ClassTypeEnv)) -> 
           Program a -> Assertion
 testTC tc p = 
   case tc p of
     Left err -> assertFailure $ show err
-    Right t' -> fmap (const ()) t' @?= fmap (const ()) p
+    Right (t',_) -> fmap (const ()) t' @?= fmap (const ()) p
 
-testTCFail :: (Eq a, Show a) => (Program a ->  BaseComputation a (ProgramT a)) -> 
+testTCFail :: (Eq a, Show a) => (Program a ->  BaseComputation a (ProgramT a,ClassTypeEnv)) -> 
               Program a -> Assertion
 testTCFail tc p = 
   case tc p of

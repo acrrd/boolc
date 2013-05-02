@@ -22,7 +22,7 @@ type ClassInfoEnvComp = ReaderT T.ClassTypeEnv (StateT (ClassInfoEnv,S.Set Class
 genClassNameSym :: String -> String
 genClassNameSym = ("struct." ++)
 
-
+{--
 buildClassValueEnv :: T.ClassTypeEnv -> IO ClassInfoEnv
 buildClassValueEnv cte = execStateT (runReaderT (mapM_ buildCVE (M.keys cte)) cte) $ buildBaseCIE cte
  where buildCVE :: ClassName -> ClassInfoEnvComp ()
@@ -34,7 +34,7 @@ buildClassValueEnv cte = execStateT (runReaderT (mapM_ buildCVE (M.keys cte)) ct
        makePair :: ClassName -> IO (ClassName,ClassInfo)
        makePair k = do t <- structCreateNamed k
                        return $ (genClassNameSym k,ClassInfo t M.empty M.empty)
-      {-- do
+      do
          (cie,visited) <- get
          if S.member cn visited then return ()
            else do 
