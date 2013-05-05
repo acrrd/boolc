@@ -256,15 +256,15 @@ typeExp (MethodCall i mn ps e) = do
   ee <- typeExpGetSymbol e
   ps' <- mapM typeExp ps
   case ee of
-    ClassSymbol (_,t) x -> do rt <- typeMethodCall i (TObjId x) mn ps'
-                              return $ StaticMethodCall (i,rt) mn ps' x
+    ClassSymbol (_,t) x -> do (ps,rt) <- typeMethodCall i (TObjId x) mn ps'
+                              return $ StaticMethodCall (i,rt) mn ps x
     _ -> do let et = getExpType ee
-            rt <- typeMethodCall i et mn ps'
-            return $ MethodCall (i,rt) mn ps' ee                      
+            (ps,rt) <- typeMethodCall i et mn ps'
+            return $ MethodCall (i,rt) mn ps ee
   
   where typeMethodCall i t mn ps' = do (psts,rt) <- lift $ getMethodType i t mn
-                                       lift $ typeParameters i psts ps'
-                                       return rt
+                                       ps <- lift $ typeParameters i psts ps'
+                                       return (ps,rt)
         typeExpGetSymbol :: Expression a ->  TypeExpressionEnv a (ExpressionT a)
         typeExpGetSymbol e = do typeExp e
                                 `catchError`
@@ -284,8 +284,8 @@ typeExp (New i cn ps) = do (CT _ _ kn fm _ mods) <- lift $ getClassType i cn
                            when (any (==Static) mods) $ throwError $ StaticClass i cn
                            kt <- lift $ getContructorType i cn
                            ps' <- mapM typeExp ps
-                           lift $ typeParameters i [kt] ps'
-                           return $ New (i,typename2Type cn) cn ps'
+                           ps'' <- lift $ typeParameters i [kt] ps'
+                           return $ New (i,typename2Type cn) cn ps''
 typeExp (DeRef i e) = do ee <- typeExp e
                          let t = getExpType ee
                          case t of
@@ -360,18 +360,24 @@ typeUnaryOp op i n e expectedts rett = do ee <- typeExp e
                                             $ throwError $ InvalidUnaOperandsError i op et
                                           return $ n (i,rett) ee
 
-typeParameters :: a -> [[Type]] -> [ExpressionT a] -> TypesystemEnv a ()
-typeParameters i psts ps' = do if null psts && null ps' then return ()
+typeParameters :: a -> [[Type]] -> [ExpressionT a] -> TypesystemEnv a [ExpressionT a]
+typeParameters i psts ps' = do if null psts && null ps' then return []
                                  else do let pst' = map getExpType ps'
-                                         typed <- foldM (\a pst -> if a then return True
-                                                                        else typeParam i pst pst'
-                                                        ) False psts
-                                         when (not typed) $ throwError $ ParameterTypeError i psts pst'
+                                         typesOk <- filterM (typeParam i pst') psts
+                                         when (null typesOk) $ throwError $ ParameterTypeError i psts pst'
+                                         return $ fixNullType (typesOk !! 0) ps'
+                                         
   where typeParam :: a -> [Type] -> [Type] -> TypesystemEnv a Bool
-        typeParam i pst pst' =  do if length pst /= length pst' then return False
+        typeParam i pst' pst =  do if length pst /= length pst' then return False
                                      else  foldM (\a (t',t) -> if a then isSubType (t') t i
-                                                                    else return False     
+                                                                    else return False
                                                  ) True $ zip pst' pst
+        fixNullType :: [Type] -> [ExpressionT a] -> [ExpressionT a]
+        fixNullType pst ps = map (\(t,e) -> case e of
+                                       Null (i,t') -> Null (i,t)
+                                       _ -> e
+                                 ) $       
+                             zip pst ps
 
 typeStatement :: (Statement a) -> TypeStatementEnv a (StatementT a)
 typeStatement (NoOp i) = return $ NoOp (i,TVoid)
@@ -396,7 +402,9 @@ typeStatement (Assign i e e') = do ee <- lift $ typeExp e
                                      _ -> case et of
                                             TRef t -> do sub <- lift $ lift $ isSubType et' t i
                                                          when (not sub) $ throwError $ IncompatibleType i et' [t]
-                                                         return $ Assign (i,TVoid) ee ee'
+                                                         case ee' of
+                                                           Null (i,t) -> return $ Assign (i,TVoid) ee $ Null (i,t)
+                                                           _ ->  return $ Assign (i,TVoid) ee ee'
                                             _ -> throwError $ LeftValueError i et
 typeStatement (If i ce st se) = do ce' <- lift $ typeExp ce
                                    let cet = getExpType ce'
