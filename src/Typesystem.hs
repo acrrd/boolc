@@ -11,6 +11,8 @@ import Control.Monad.Reader
 import Data.Functor.Identity
 import Data.List
 
+import Debug.Trace
+
 data Type = TInt | TBool | TString | TVoid | TNull
           | TObjId ClassName | TRef Type
           deriving (Eq,Show)
@@ -167,31 +169,42 @@ isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' c
                                           checkFieldParent f i
 
         checkFieldParent :: FieldName -> a -> CheckMemberEnv a ()
-        checkFieldParent f i = do (CT _ pn _ fs _ _) <- getParentType
-                                  when (Map.member f fs) $ throwError $ FieldHiding f i pn
-                                  if not $ null pn
-                                    then local (const pn) $ checkFieldParent f i
-                                    else return ()
+        checkFieldParent f i = do parent <- getParentType
+                                  case parent of
+                                    Nothing -> return ()
+                                    Just (CT _ pn _ fs _ _) -> do
+                                      when (Map.member f fs) $ throwError $ FieldHiding f i pn
+                                      if not $ null pn
+                                        then local (const pn) $ checkFieldParent f i
+                                        else return ()
 
         checkMethodParent :: MethodName -> MethodType -> a -> CheckMemberEnv a ()
-        checkMethodParent m mt i = do (CT _ pn _ _ ms _) <- getParentType
-                                      case Map.lookup m ms of
-                                        Just mt' -> when (mt /= mt') $ throwError $ MethodOverload m i pn
-                                        Nothing -> if not $ null pn 
-                                                     then local (const pn) $ checkMethodParent m mt i
-                                                     else return ()
+        checkMethodParent m mt i = do parent <- getParentType
+                                      case parent of
+                                        Nothing -> return ()
+                                        Just (CT _ pn _ _ ms _) -> do
+                                          case Map.lookup m ms of
+                                            Just mt' -> when (mt /= mt') $ throwError $ MethodOverload m i pn
+                                            Nothing -> if not $ null pn 
+                                                       then local (const pn) $ checkMethodParent m mt i
+                                                       else return ()
 
         checkParameter :: ParameterDecl a -> TypesystemEnv a ()
         checkParameter (ParameterDecl i t _) = typeExist t i
 
-        getParentType :: CheckMemberEnv a (ClassType)
+        mtrace s = trace s (return ())
+
+        getParentType :: CheckMemberEnv a (Maybe ClassType)
         getParentType = do cn <- ask
+                           mtrace $ cn ++ " ask for its parent"
                            env <- lift ask
                            case Map.lookup cn env of
-                             Just (CT _ pn _ _ _ _) ->
-                               case Map.lookup pn env of
-                                 Just pct -> return pct
-                                 Nothing -> throwError $ MiscError "Parent class is not in the environment"
+                             Just (CT _ pn _ _ _ _) -> 
+                               if null pn then return Nothing
+                                 else              
+                                   case Map.lookup pn env of
+                                     Just pct -> return $ Just pct
+                                     Nothing -> throwError $ MiscError "Parent class is not in the environment"
                              Nothing -> throwError $ MiscError "Current class is not in the environment"
 
 buildConstrArgs :: ClassTypeEnv -> ClassTypeEnv
