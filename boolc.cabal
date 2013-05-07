@@ -11,7 +11,8 @@ build-type:          Simple
 cabal-version:       >=1.2
 
 executable boolc
-  build-depends: base ==4.5.*, parsec, containers, mtl, transformers, llvm-base
+  build-depends: base ==4.5.*, parsec, containers, mtl, transformers,
+                 llvm-base, filepath
   main-is: Main.hs
   other-modules: Ast, AstUtils, Parser, Typesystem, LLVM, ToLLVM
   hs-source-dirs: src
