@@ -10,7 +10,6 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Data.Functor.Identity
 import Data.List
-import Debug.Trace
 
 data Type = TInt | TBool | TString | TVoid | TNull
           | TObjId ClassName | TRef Type
@@ -131,8 +130,6 @@ typeExist t i = do env <- ask
 type CheckMemberEnv i = ReaderT ClassName (TypesystemEnv i)
 type WellFormedComp i = ReaderT (Set.Set ClassName) (StateT (Set.Set ClassName) (TypesystemEnv i))
 
-mtrace s = trace s $ return ()
-
 isWellFormed :: Program a -> TypesystemEnv a ()
 isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' cds) cds) Set.empty) Set.empty
 
@@ -158,8 +155,7 @@ isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' c
                 Just cd -> local (Set.insert current) $ isWellFormed' cds cd
 
         checkMethod :: MethodDecl a -> CheckMemberEnv a ()
-        checkMethod (MethodDecl i ret m ps s) = do mtrace ("CheckMethod " ++ m)
-                                                   lift $ typeExist ret i
+        checkMethod (MethodDecl i ret m ps s) = do lift $ typeExist ret i
                                                    lift $ mapM_ checkParameter ps
                                                    let rt = typename2Type ret
                                                        pst = getParametersType ps
@@ -302,15 +298,16 @@ typeExp (DeRef i e) = do ee <- typeExp e
                            TRef t' -> return $ DeRef (i,t') ee
                            _ -> throwError $ NotDereferencable i t
 
-getContructorType :: a -> ClassName -> TypesystemEnv a [Type]
-getContructorType i cn =  do kn <- getContrField i cn
-                             mapM (getContrFieldType i cn) kn
+getContrFields :: a -> ClassName -> TypesystemEnv a [FieldName]
+getContrFields i cn = do (CT _ pn kn _ _ _) <- getClassType i cn
+                         if not $ null pn then liftM (++kn) $ getContrFields i pn
+                                          else return kn
 
-  where getContrField :: a -> ClassName -> TypesystemEnv a [FieldName]
-        getContrField i cn = do (CT _ pn kn _ _ _) <- getClassType i cn
-                                if not $ null pn then liftM (++kn) $ getContrField i pn
-                                                 else return kn
-        getContrFieldType :: a -> ClassName -> FieldName -> TypesystemEnv a Type
+getContructorType :: a -> ClassName -> TypesystemEnv a [Type]
+getContructorType i cn =  do kns <- getContrFields i cn
+                             mapM (getContrFieldType i cn) kns
+
+  where getContrFieldType :: a -> ClassName -> FieldName -> TypesystemEnv a Type
         getContrFieldType i cn fn = getFieldType i (typename2Type cn) fn
                                     `catchError`
                                     (\e -> case e of
