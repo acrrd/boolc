@@ -274,7 +274,10 @@ tests_IsWellFormed tc =
     testCase "IWF5" $ testTC tc $ p [(cd "A" "B" [] [(md "int" "m" [] noop)]),(cd "B" "Object" [] [(md "int" "m" [] noop)])],
     testCase "IWF6" $ testTCFail tc $ p [(cd "A" "B" [] [(md "bool" "m" [] noop)]),(cd "B" "Object" [] [(md "int" "m" [] noop)])],
     testCase "IWF7" $ testTCFail tc $ p [(cd "A" "B" [] [(md "int" "m" [pd "int" "x"] noop)]),(cd "B" "Object" [] [(md "int" "m" [] noop)])],
-    testCase "IWF8" $ testTCFail tc $ p [(cd "A" "System" [] [])]
+    testCase "IWF8" $ testTCFail tc $ p [(cd "A" "Object" [(fd "B" "f")] [])],
+    testCase "IWF8.1" $ testTCFail tc $ p [(cd "A" "Object" [] [(md "B" "m" [] noop)])],
+    testCase "IWF8.2" $ testTCFail tc $ p [(cd "A" "Object" [] [(md "int" "m" [pd "B" "x"] noop)])],
+    testCase "IWF9" $ testTCFail tc $ p [(cd "A" "System" [] [])]
   ]
   where p = Program
         cd = ClassDecl ()

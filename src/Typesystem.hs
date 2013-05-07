@@ -10,6 +10,7 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Data.Functor.Identity
 import Data.List
+import Debug.Trace
 
 data Type = TInt | TBool | TString | TVoid | TNull
           | TObjId ClassName | TRef Type
@@ -130,26 +131,35 @@ typeExist t i = do env <- ask
 type CheckMemberEnv i = ReaderT ClassName (TypesystemEnv i)
 type WellFormedComp i = ReaderT (Set.Set ClassName) (StateT (Set.Set ClassName) (TypesystemEnv i))
 
-isWellFormed :: Program a -> TypesystemEnv a ()
-isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' prog) cds) Set.empty) Set.empty
+mtrace s = trace s $ return ()
 
-  where isWellFormed' :: Program i -> ClassDecl i -> WellFormedComp i ()
-        isWellFormed' prog@(Program cds) (ClassDecl i cn pn fs ms)  =
+isWellFormed :: Program a -> TypesystemEnv a ()
+isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' cds) cds) Set.empty) Set.empty
+
+  where isWellFormed' :: [ClassDecl i] -> ClassDecl i -> WellFormedComp i ()
+        isWellFormed' cds (ClassDecl i cn pn fs ms)  =
           do cycle <- asks $ Set.member cn
              when cycle $ throwError $ CyclicInheritance i cn
              checked <- gets $ Set.member cn
              if checked then return ()
                else do modify $ Set.insert cn
                        if null pn then return ()
-                         else if Map.member pn  buildInTypes then return ()
-                                else do case find (\(ClassDecl _ cn' _ _ _) -> if pn == cn' then True else False ) cds of
-                                          Nothing -> throwError $ ClassDontExist pn i
-                                          Just pd -> do local (Set.insert cn) $ isWellFormed' prog pd
-                                                        lift $ lift $ runReaderT (mapM_ checkField fs) cn
-                                                        lift $ lift $ runReaderT (mapM_ checkMethod ms) cn
+                         else do
+                           checkParent i cn cds pn
+                           lift $ lift $ runReaderT (mapM_ checkField fs) cn
+                           lift $ lift $ runReaderT (mapM_ checkMethod ms) cn
+
+        checkParent :: a -> ClassName -> [ClassDecl a] -> ClassName -> WellFormedComp a ()
+        checkParent i current cds pn = 
+          if Map.member pn buildInTypes then return ()
+            else
+              case find (\(ClassDecl _ cn _ _ _) -> if pn == cn then True else False ) cds of
+                Nothing -> throwError $ ClassDontExist pn i
+                Just cd -> local (Set.insert current) $ isWellFormed' cds cd
 
         checkMethod :: MethodDecl a -> CheckMemberEnv a ()
-        checkMethod (MethodDecl i ret m ps s) = do lift $ typeExist ret i
+        checkMethod (MethodDecl i ret m ps s) = do mtrace ("CheckMethod " ++ m)
+                                                   lift $ typeExist ret i
                                                    lift $ mapM_ checkParameter ps
                                                    let rt = typename2Type ret
                                                        pst = getParametersType ps
