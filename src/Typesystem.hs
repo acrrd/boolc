@@ -11,8 +11,6 @@ import Control.Monad.Reader
 import Data.Functor.Identity
 import Data.List
 
-import Debug.Trace
-
 data Type = TInt | TBool | TString | TVoid | TNull
           | TObjId ClassName | TRef Type
           deriving (Eq,Show)
@@ -192,11 +190,8 @@ isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' c
         checkParameter :: ParameterDecl a -> TypesystemEnv a ()
         checkParameter (ParameterDecl i t _) = typeExist t i
 
-        mtrace s = trace s (return ())
-
         getParentType :: CheckMemberEnv a (Maybe ClassType)
         getParentType = do cn <- ask
-                           mtrace $ cn ++ " ask for its parent"
                            env <- lift ask
                            case Map.lookup cn env of
                              Just (CT _ pn _ _ _ _) -> 
