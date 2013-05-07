@@ -286,14 +286,14 @@ tests_booleanOrExpression p =
 tests_noOpStatement p =
   [
     testCase "noOp1" $ testParseAST p ";" (NoOp ()),
-    testCase "noOp" $ testParseAST p ";" (NoOp ())
+    testCase "noOp" $ testParseFail p "?"
   ]
 
 tests_declarationStatement p =
   [
-    testCase "declaration1" $ testParseAST p "t x;" (Declaration () "t" "x"),
-    testCase "declaration2" $ testParseAST p "t x ; " (Declaration () "t" "x"),
-    testCase "declaration3" $ testParseFail p "t x"
+    testCase "declaration1" $ testParseAST p "int x;" (Declaration () "int" "x"),
+    testCase "declaration2" $ testParseAST p "C x ; " (Declaration () "C" "x"),
+    testCase "declaration3" $ testParseFail p "C x"
   ]
 
 tests_expStmStatement p =
@@ -348,21 +348,25 @@ tests_blockStatement p =
 
 tests_fieldDecl p =
   [
-    testCase "fieldDecl1" $ testParseAST p "t x;" (FieldDecl () "t" "x"),
-    testCase "fieldDecl2" $ testParseAST p "t x ; " (FieldDecl () "t" "x"),
+    testCase "fieldDecl1" $ testParseAST p "int x;" (FieldDecl () "int" "x"),
+    testCase "fieldDecl2" $ testParseAST p "C x ; " (FieldDecl () "C" "x"),
     testCase "fieldDecl3" $ testParseFail p "t x"
   ]
 
 tests_methodDecl p =
   [
-    testCase "methodDecl1" $ testParseAST p "t m(){}" (MethodDecl () "t" "m" [] (Block [])),
-    testCase "methodDecl2" $ testParseAST p "t m(t x){}" (MethodDecl () "t" "m" [ParameterDecl () "t" "x"] (Block [])),
-    testCase "methodDecl3" $ testParseAST p "t m(t x,u y){}" (MethodDecl () "t" "m" [ParameterDecl () "t" "x",ParameterDecl () "u" "y"] (Block [])),
-    testCase "methodDecl4" $ testParseAST p "t m(){1;}" (MethodDecl () "t" "m" [] (Block [(ExpStm (I () 1))])),
-    testCase "methodDecl5" $ testParseAST p "t m(){1;1;}" (MethodDecl () "t" "m" [] (Block [(ExpStm (I () 1)),(ExpStm (I () 1))])),
-    testCase "methodDecl6" $ testParseFail p "t m()",
-    testCase "methodDecl7" $ testParseFail p "t m() 1;",
-    testCase "methodDecl8" $ testParseFail p "t m() return 1;",
+    testCase "methodDecl1" $ testParseAST p "int m(){}" (MethodDecl () "int" "m" [] (Block [])),
+    testCase "methodDecl2" $ testParseAST p "int m(int x){}" (MethodDecl () "int" "m" [ParameterDecl () "int" "x"] (Block [])),
+    testCase "methodDecl3" $ testParseAST p "int m(int x,C y){}" (MethodDecl () "int" "m" [ParameterDecl () "int" "x",ParameterDecl () "C" "y"] (Block [])),
+    testCase "methodDecl4" $ testParseAST p "int m(){1;}" (MethodDecl () "int" "m" [] (Block [(ExpStm (I () 1))])),
+    testCase "methodDecl5" $ testParseAST p "int m(){1;1;}" (MethodDecl () "int" "m" [] (Block [(ExpStm (I () 1)),(ExpStm (I () 1))])),
+    testCase "methodDecl5.1" $ testParseAST p "int m(int x){1;1;}" (MethodDecl () "int" "m" [ParameterDecl () "int" "x"] (Block [(ExpStm (I () 1)),(ExpStm (I () 1))])),
+    testCase "methodDecl5.1" $ testParseAST p "int m(int x){ return 1; }" (MethodDecl () "int" "m" [ParameterDecl () "int" "x"] (Block [Return () (I () 1)])),
+    testCase "methodDecl5.2" $ testParseAST p "int m(int x){ int x; }" (MethodDecl () "int" "m" [ParameterDecl () "int" "x"] (Block [Declaration () "int" "x"])),
+    testCase "methodDecl5.2" $ testParseAST p "int m(int x){ int x; return 1; }" (MethodDecl () "int" "m" [ParameterDecl () "int" "x"] (Block [Declaration () "int" "x",Return () (I () 1)])),
+    testCase "methodDecl6" $ testParseFail p "int m()",
+    testCase "methodDecl7" $ testParseFail p "int m() 1;",
+    testCase "methodDecl8" $ testParseFail p "int m() return 1;",
     testCase "methodDecl9" $ testParseFail p "m(){}",
     testCase "methodDecl10" $ testParseFail p "m()",
     testCase "methodDecl11" $ testParseFail p "m() 1;",
@@ -373,18 +377,18 @@ tests_classDecl p =
   [
     testCase "classDecl1" $ testParseAST p "class c {}" (ClassDecl () "c" "" [] []),
     testCase "classDecl2" $ testParseAST p "class c extends d {}" (ClassDecl () "c" "d" [] []),
-    testCase "classDecl3" $ testParseAST p "class c extends d {t x;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x")] []),
-    testCase "classDecl4" $ testParseAST p "class c extends d {t x; u y;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x"),(FieldDecl () "u" "y")] []),
-    testCase "classDecl5" $ testParseAST p "class c extends d {t m(){}}" (ClassDecl () "c" "d" [] [(MethodDecl () "t" "m" [] (Block []))]),
-    testCase "classDecl6" $ testParseAST p "class c extends d {t m(){} t x;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x")] 
-                                                                                                    [(MethodDecl () "t" "m" [] (Block []))]),
-    testCase "classDecl7" $ testParseAST p "class c extends d {t x; t m(){}}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x")] 
-                                                                                                    [(MethodDecl () "t" "m" [] (Block []))]),
-    testCase "classDecl8" $ testParseAST p "class c extends d {t x; t m(){} u y;}" (ClassDecl () "c" "d" [(FieldDecl () "t" "x"), (FieldDecl () "u" "y")]
-                                                                                                         [(MethodDecl () "t" "m" [] (Block []))]),
-    testCase "classDecl8" $ testParseAST p "class c extends d {t m(){} u y; u n(){}}" (ClassDecl () "c" "d" [(FieldDecl () "u" "y")] 
-                                                                                                            [(MethodDecl () "t" "m" [] (Block [])),
-                                                                                                             (MethodDecl () "u" "n" [] (Block []))]),
+    testCase "classDecl3" $ testParseAST p "class c extends d {int x;}" (ClassDecl () "c" "d" [(FieldDecl () "int" "x")] []),
+    testCase "classDecl4" $ testParseAST p "class c extends d {C x; int y;}" (ClassDecl () "c" "d" [(FieldDecl () "C" "x"),(FieldDecl () "int" "y")] []),
+    testCase "classDecl5" $ testParseAST p "class c extends d {   int m()  {}  }" (ClassDecl () "c" "d" [] [(MethodDecl () "int" "m" [] (Block []))]),
+    testCase "classDecl6" $ testParseAST p "class c extends d {int m(){} C x;}" (ClassDecl () "c" "d" [(FieldDecl () "C" "x")] 
+                                                                                                    [(MethodDecl () "int" "m" [] (Block []))]),
+    testCase "classDecl7" $ testParseAST p "class c extends d {int x; C m(){}}" (ClassDecl () "c" "d" [(FieldDecl () "int" "x")] 
+                                                                                                    [(MethodDecl () "C" "m" [] (Block []))]),
+    testCase "classDecl8" $ testParseAST p "class c extends d {C x; int m(){} D y;}" (ClassDecl () "c" "d" [(FieldDecl () "C" "x"), (FieldDecl () "D" "y")]
+                                                                                                         [(MethodDecl () "int" "m" [] (Block []))]),
+    testCase "classDecl8" $ testParseAST p "class c extends d {int m(){} C y; D n(){}}" (ClassDecl () "c" "d" [(FieldDecl () "C" "y")] 
+                                                                                                            [(MethodDecl () "int" "m" [] (Block [])),
+                                                                                                             (MethodDecl () "D" "n" [] (Block []))]),
     testCase "classDecl9" $ testParseFail p "class",
     testCase "classDecl10" $ testParseFail p "class c",
     testCase "classDecl11" $ testParseFail p "class extends",

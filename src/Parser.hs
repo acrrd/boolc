@@ -180,6 +180,9 @@ endStm stmparser = do x <- stmparser
                       semi
                       return x
 
+parseType :: Parser TypeName
+parseType = try parsePrimitiveTypes <|> identifier
+
 parseStatement :: Parser StatementSP
 parseStatement = choice [parseBlockStatement,
                          parseNoOpStatement,
@@ -194,7 +197,7 @@ parseNoOpStatement :: Parser StatementSP
 parseNoOpStatement = liftM2 (const.NoOp) getPosition semi
 
 parseDeclarationStatement :: Parser StatementSP
-parseDeclarationStatement = endStm $ liftM3 Declaration getPosition identifier identifier
+parseDeclarationStatement = endStm $ liftM3 Declaration getPosition parseType identifier
 
 parseExpStmOrAssignStatement :: Parser StatementSP
 parseExpStmOrAssignStatement = endStm $ do e1 <- parseExpression
@@ -217,7 +220,8 @@ parseWhileStatement = liftM3 While parsePos parseCond parseStatement
         parseCond = parens parseExpression
 
 parseReturnStatement :: Parser StatementSP
-parseReturnStatement = liftM2 Return getPosition parseExpression
+parseReturnStatement = endStm $ liftM2 Return parsePos parseExpression
+  where parsePos = reserved "return" >> getPosition
 
 parseBlockStatement :: Parser StatementSP
 parseBlockStatement = liftM Block $ braces $ many parseStatement
@@ -229,8 +233,8 @@ parseFieldDecl = do d <- parseDeclarationStatement
                     return $ FieldDecl pos t v
 
 parseMethodDecl :: Parser MethodDeclSP
-parseMethodDecl = liftM5 MethodDecl getPosition identifier identifier parseParameterDecl parseBody
-  where parseParameterDecl = parens $ commaSep $ liftM3 ParameterDecl getPosition identifier identifier
+parseMethodDecl = liftM5 MethodDecl getPosition parseType identifier parseParameterDecl parseBody
+  where parseParameterDecl = parens $ commaSep $ liftM3 ParameterDecl getPosition parseType identifier
         parseBody = parseBlockStatement
 
 parseMember :: Parser MemberSP
