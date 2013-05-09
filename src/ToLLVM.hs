@@ -19,8 +19,6 @@ import Foreign.C.String (peekCString)
 
 import Debug.Trace
 
---lift2 = lift . lift
-
 genLLVMCode :: T.ProgramT a -> T.ClassTypeEnv -> FilePath -> IO ()
 genLLVMCode p cte output = do
   modul <- createModule output
@@ -124,7 +122,7 @@ buildClassInfoEnv cte = do
                                              let pt = classType pi
                                              let pmst = methodsTable pi
                                              structbody <- lift $ lift $ lift $ runReaderT (buildStructBody ct fns ftm (mtm `M.difference` pmst)) cie
-                                             let (fos,mos) = makeOffsets (getLastOffset pi) fns (M.keys mtm \\ M.keys pmst)
+                                             let (fos,mos) = makeOffsets fns (M.keys mtm \\ M.keys pmst)
                                              lift $ lift $ lift $ structSetBody ct (pt:structbody) False
                                              mt <- initMethods cn ct mtm
 
@@ -142,15 +140,6 @@ buildClassInfoEnv cte = do
        makePair k = do t <- structCreateNamed $ genClassNameSym k
                        return $ (k,ClassInfo t "" M.empty M.empty M.empty)
 
-       
-       getLastOffset :: ClassInfo -> Int
-       getLastOffset ci = 0
-       {--
-       getLastOffset ci = let fo = M.elems $ fieldOffsets ci
-                              mo = M.elems $ methodOffsets ci
-                              offsets = fo ++ mo in
-                          if null offsets then 0 else maximum offsets
-       --}
 
        makeMethodType :: Type -> [T.Type] -> T.Type -> ClassInfoEnvComp Type
        makeMethodType ct pts rt = do
@@ -175,9 +164,9 @@ buildClassInfoEnv cte = do
                      ) $ M.keys mtm
          return $ sft ++ smt
 
-       makeOffsets :: Int -> [FieldName] -> [MethodName] -> (FieldOffSets,MethodOffSets)
-       makeOffsets boffset fns mns = (fos,mos)
-         where fosmin = boffset + 1
+       makeOffsets :: [FieldName] -> [MethodName] -> (FieldOffSets,MethodOffSets)
+       makeOffsets fns mns = (fos,mos)
+         where fosmin = 1
                fosmax = fosmin + length fns
                mosmax = fosmax + length mns
                fos = M.fromList $ zip fns [fosmin..fosmax]
@@ -234,27 +223,12 @@ buildClassInfoEnv cte = do
               let ppvs = (thiscast:(drop 1 ppvs'))
 
               let cps = drop ppslen params
-              
-              {--
-              trace ("cie:" ++ (show cie)) $ return ()
-              trace ("START " ++ cn) $ return ()
-              trace ("params:" ++ (show params)) $ return ()
-              trace ("ppslen:" ++ (show ppslen)) $ return ()
-              trace ("pps:" ++ (show pps)) $ return ()
-              trace ("cps:" ++ (show cps)) $ return ()
-
-              trace ("callign parent construcotr") $ return ()       
-
-              trace "call parent constructor" $ return ()
-              
-              trace "initialized fields" $ return ()
-              --}
                   
               tmpVal $ call pkv ppvs
               mapM (uncurry $ initField cie' this cn) cps
               mapM (uncurry $ initMethod cie' this cn) $ M.toList $ methodsTable ci
               retVoid
-              --trace ("FINISH " ++ cn) $ return ()
+              
             return kv
        
               where --initField :: Value -> FieldName -> Value -> CodeGenFunction Value
@@ -264,8 +238,6 @@ buildClassInfoEnv cte = do
                     
                     initMethod cie this cn mn mv = do 
                       method <- runReaderT (getMethod this cn mn) cie
---                      mvt <- lift $ lift $ FFI.typeOf mv
---                      method' <- bitCast method mvt
                       store mv method
 
 type GenCodeExp = ReaderT ClassInfoEnv CodeGenFunction
