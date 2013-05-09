@@ -2,8 +2,9 @@ module LLVM where
 
 import Prelude hiding (and)
 
+import Data.List
 import Data.Int
-import Data.Map as M
+import qualified Data.Map as M
 
 import Control.Monad
 import Control.Monad.Trans
@@ -11,11 +12,13 @@ import Control.Monad.State
 import Control.Monad.Reader
 
 import Foreign.C.String (withCString, withCStringLen, CString, peekCString,newCString)
-import Foreign.Marshal.Array (withArrayLen, withArray, allocaArray, peekArray)
+import Foreign.Marshal.Array (withArrayLen, withArray, allocaArray, peekArray,newArray)
 import Foreign.Marshal.Utils (fromBool)
 
 import qualified LLVM.FFI.Core as FFI
 import qualified LLVM.FFI.BitWriter as FFI
+
+import Debug.Trace
 
 type Value = FFI.ValueRef
 type Type = FFI.TypeRef
@@ -75,8 +78,96 @@ annotateValueList vs = do
   names <- mapM getValueNameU vs
   return $ zip names vs
 
+{--
+deepTypeKindEq :: Value -> Value -> IO Bool
+deepTypeKindEq v1 v2 = do
+  v1t <- FFI.typeOf v1
+  v2t <- FFI.typeOf v2
+  eq v1 v2
 
-type GlobalString = Map String FFI.ValueRef
+ where eq :: Type -> Type -> IO Bool
+       eq t1 t2 = do
+         p1k <- FFI.getTypeKind p1
+         p2k <- FFI.getTypeKind p1
+         
+         if p1k != p2k then return False
+           else  
+             case p1k of
+               FFI.VoidTypeKind -> return True
+               FFI.FloatTypeKind -> return True
+               FFI.DoubleTypeKind -> return True
+               FFI.X86_FP80TypeKind -> return True
+               FFI.FP128TypeKind -> return True
+               FFI.PPC_FP128TypeKind -> return True
+               FFI.LabelTypeKind -> return True
+               FFI.OpaqueTypeKind -> return False
+               FFI.IntegerTypeKind -> do w1 <- FFI.getIntTypeWidth p1
+                                         w2 <- FFI.getIntTypeWidth p2
+                                         if w1 == w2 then return True
+                                                     else return False
+               FFI.PointerTypeKind -> do t1 <- FFI.getElementType p1 
+                                         t2 <- FFI.getElementType p2
+                                         eq t1 t2
+               FFI.ArrayTypeKind -> do n1 <- FFI.getArrayLength p1
+                                       n2 <- FFI.getArrayLength p2
+                                       if n1 != n2 then do
+                                           t1 <- FFI.getElementType p1
+                                           t2 <- FFI.getElementType p2
+                                           eq t1 t2
+                                         else return False
+               FFI.VectorTypeKind ->do n1 <- FFI.getVectorSize p1
+                                       n2 <- FFI.getVectorSize p2
+                                       if n1 != n2 then do
+                                           t1 <- FFI.getElementType p1
+                                           t2 <- FFI.getElementType p2
+                                           eq t1 t2
+                                         else return False
+               FFI.FunctionTypeKind -> do
+                 c1 <- FFI.countParamTypes p1
+                 c2 <- FFI.countParamTypes p2
+                 if c1 == c2 then do
+                   rt1 <- FFI.getReturnType p1
+                   rt2 <- FFI.getReturnType p1
+                   
+                   rt <- eq rt1 rt2
+                   if rt then do
+                     let n1 = fromIntegral c1
+                     let n2 = fromIntegral c2
+                   
+                     as1 <- allocaArray n1 $ \ args -> do
+                            FFI.getParamTypes p1 args
+                            peekArray n1 args
+                     as2 <- allocaArray n2 $ \ args -> do
+                            FFI.getParamTypes p2 args
+                            peekArray n2 args
+                     
+                     foldM (\(r c) -> if r then (uncurry eq) c
+                                           else return False     
+                           ) zip as1 as2
+                     else return False
+                   else return False
+
+               FFI.StructTypeKind -> do
+                 c1 <- FFI.countStructElementTypes p1
+                 c2 <- FFI.countStructElementTypes p2
+                 if c1 == c2 then do
+                     let n1 = fromIntegral c1
+                     let n2 = fromIntegral c2
+                   
+                     as1 <- allocaArray n1 $ \ args -> do
+                            FFI. p1 args
+                            peekArray n1 args
+                     as2 <- allocaArray n2 $ \ args -> do
+                            FFI.getParamTypes p2 args
+                            peekArray n2 args
+                     
+                     foldM (\(r c) -> if r then (uncurry eq) c
+                                           else return False     
+                           ) zip as1 as2
+                   else return False
+--}
+
+type GlobalString = M.Map String FFI.ValueRef
 data CGMState =  CGMState { cgm_module :: Module, cgm_globalstring :: GlobalString }
 type CodeGenModule = StateT CGMState IO
 data CGFState =  CGFState { cgf_builder :: Builder, cgf_function :: Function }
@@ -122,8 +213,24 @@ addGlobalString strname strvalue = do
                   lift $ setGlobalStringMap $ M.insert strvalue v gsm
                   return v
 
+constInt :: Type -> Int -> Value
+constInt t v = do
+  FFI.constInt t (fromIntegral v) (fromIntegral 1)
+
 getFunctionType :: Function -> IO Type
-getFunctionType = FFI.typeOf
+getFunctionType fun = do 
+  ft <- FFI.typeOf fun
+  ftk <- FFI.getTypeKind ft
+  case ftk of
+    FFI.FunctionTypeKind -> return ft
+    FFI.PointerTypeKind -> FFI.getElementType ft >>= return
+    k -> error $ "Not a function (" ++ (show k) ++ ")"
+
+getFunctionReturnType :: CodeGenFunction Type
+getFunctionReturnType = do
+  function <- getFunction
+  ft <- lift2 $ getFunctionType function
+  lift2 $ FFI.getReturnType ft
 
 newNamedFunction :: FFI.Linkage -> String -> Type -> [String] -> CodeGenModule Function
 newNamedFunction linkage name funtype paramnames = do
@@ -136,12 +243,6 @@ newNamedFunction linkage name funtype paramnames = do
 
 defineFunction :: Function -> ([(String,Value)] -> CodeGenFunction ()) -> CodeGenModule ()
 defineFunction fun body = do
-  {--ft <- lift $ getFunctionType fun
-  pnPtr <- FFI.countParamTypes ft
-  let pn = fromIntegral pnPtr
-  paramType <- allocaArray n $ \ args -> do
-		     FFI.getParamTypes p args
-		     peekArray n args --}
   builder <- lift $ FFI.createBuilder
   let pn = fromIntegral $ FFI.countParams fun
   paramvalues <- lift $ allocaArray pn $ \ args -> do
@@ -184,9 +285,60 @@ abinop op id vl vr = do
 
 add = abinop FFI.buildAdd
   
+store :: Value -> Value -> CodeGenFunction Value
+store src dst = do
+  builder <- getBuilder
+  lift2 $ FFI.buildStore builder src dst
+
+structGEP :: Value -> Int -> String -> CodeGenFunction Value
+structGEP struct offset name = do
+  builder <- getBuilder
+  lift2 $ withCString name $ \namePtr ->
+    FFI.buildStructGEP builder struct (fromIntegral offset) namePtr
+
+gep :: Value -> [Int] -> String -> CodeGenFunction Value
+gep this indexs name = do
+  builder <- getBuilder
+  let i32indexs = map (constInt FFI.int32Type) indexs
+  lift2 $ withArrayLen i32indexs $ \ len ptr -> 
+         withCString name $ \namePtr ->
+           FFI.buildInBoundsGEP builder this ptr (fromIntegral len) namePtr
+
+call :: Value -> [Value] -> String -> CodeGenFunction Value
+call fun params name = do
+  builder <- getBuilder
+  paramsPtr <- lift2 $ newArray params
+  let len = fromIntegral $ length params
+  rt <- getFunctionReturnType
+  rtk <- lift2 $ FFI.getTypeKind rt
+  name' <- case rtk of
+             FFI.VoidTypeKind -> return ""
+             _ -> return name
+  lift2 $ withCString name' $ \namePtr ->
+    FFI.buildCall builder fun paramsPtr len namePtr
+
+bitCast :: Value -> Type -> CodeGenFunction Value
+bitCast value t = do
+  builder <- getBuilder
+  namePtr <- lift2 $ FFI.getValueName value
+  name <- lift2 $ peekCString namePtr
+  lift2 $ withCString name $ \namePtr ->
+    FFI.buildBitCast builder value t namePtr
+
+malloc :: Type -> String -> CodeGenFunction Value
+malloc t name = do
+  builder <- getBuilder
+  lift2 $ withCString name $ \namePtr ->
+    FFI.buildMalloc builder t namePtr
+
 ret :: Value -> CodeGenFunction ()
 ret v = do 
   builder <- getBuilder
   lift2 $ FFI.buildRet builder v
   return ()
 
+retVoid :: CodeGenFunction ()
+retVoid = do 
+  builder <- getBuilder
+  lift2 $ FFI.buildRetVoid builder
+  return ()
