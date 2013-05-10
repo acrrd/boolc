@@ -316,12 +316,15 @@ getContructorType i cn =  do kns <- getContrFields i cn
                              mapM (getContrFieldType i cn) kns
 
   where getContrFieldType :: a -> ClassName -> FieldName -> TypesystemEnv a Type
-        getContrFieldType i cn fn = getFieldType i (typename2Type cn) fn
+        getContrFieldType i cn fn = liftM remTRef $  getFieldType i (typename2Type cn) fn
                                     `catchError`
                                     (\e -> case e of
                                              FieldDontExist fn _ _ -> throwError $ MiscError "Illformed class type"
                                              _ -> throwError e
                                     )
+        remTRef :: Type -> Type
+        remTRef (TRef t) = t
+        remTRef t = t
 
 getClassType :: a -> ClassName -> TypesystemEnv a ClassType
 getClassType i cn = do cte <- ask
@@ -346,6 +349,29 @@ getMethodType i t@(TObjId cn) mn = do (CT _ pn _ _ mm _) <- getClassType i cn
                                                    then getMethodType i (typename2Type pn) mn
                                                    else throwError $ MethodDontExist mn i t
 getMethodType i t mn = throwError $ MethodDontExist mn i t
+
+
+getMethodClassType :: a -> Type -> MethodName -> TypesystemEnv a ClassType
+getMethodClassType i t mn = do
+  r <- getMCT i t mn
+  case r of
+    Nothing -> throwError $ MethodDontExist mn i t
+    Just ct -> return ct
+  
+  where getMCT :: a -> Type -> MethodName -> TypesystemEnv a (Maybe ClassType)
+        getMCT i t@(TObjId cn) mn = do ct@(CT _ pn _ _ mm _) <- getClassType i cn
+                                       case Map.lookup mn mm of
+                                         Just _ -> if not $ null pn 
+                                                     then do
+                                                        r <- getMCT i (typename2Type pn) mn
+                                                        case r of
+                                                          Nothing -> return $ Just ct
+                                                          Just ct -> return $ Just ct
+                                                     else return Nothing
+                                         Nothing -> if not $ null pn 
+                                                      then getMCT i (typename2Type pn) mn 
+                                                      else return Nothing
+        getMCT i t mn = throwError $ MethodDontExist mn i t
 
 isSubType :: Type -> Type -> a -> TypesystemEnv a Bool
 isSubType TNull (TObjId _) _ = return True
