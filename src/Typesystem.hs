@@ -305,6 +305,7 @@ typeExp (DeRef i e) = do ee <- typeExp e
                          case t of
                            TRef t' -> return $ DeRef (i,t') ee
                            _ -> throwError $ NotDereferencable i t
+typeExp t = throwError $ MiscError $ "No one shuld ask for typecheck this, it is only internal stuff"
 
 getContrFields :: a -> ClassName -> TypesystemEnv a [FieldName]
 getContrFields i cn = do (CT _ pn kn _ _ _) <- getClassType i cn
@@ -444,8 +445,8 @@ typeStatement (Assign i e e') = do ee <- lift $ typeExp e
                                             TRef t -> do sub <- lift $ lift $ isSubType et' t i
                                                          when (not sub) $ throwError $ IncompatibleType i et' [t]
                                                          case ee' of
-                                                           Null (i,t) -> return $ Assign (i,TVoid) ee $ Null (i,t)
-                                                           _ ->  return $ Assign (i,TVoid) ee ee'
+                                                           Null (i,_) -> return $ Assign (i,t) ee $ Null (i,t)
+                                                           _ ->  return $ Assign (i,t) ee ee'
                                             _ -> throwError $ LeftValueError i et
 typeStatement (If i ce st se) = do ce' <- lift $ typeExp ce
                                    let cet = getExpType ce'
@@ -453,6 +454,11 @@ typeStatement (If i ce st se) = do ce' <- lift $ typeExp ce
                                    st' <- typeStatement st
                                    se' <- typeStatement se
                                    return $ If (i,TVoid) ce' st' se'
+typeStatement (While i ce s) = do ce' <- lift $ typeExp ce
+                                  let cet = getExpType ce'
+                                  when (cet /= TBool) $ throwError $ IncompatibleType i cet [TBool]
+                                  st' <- typeStatement s
+                                  return $ While (i,TVoid) ce' st'
 typeStatement (Return i e ) = do ee <- lift $ typeExp e
                                  let et = getExpType ee
                                  rt <- ask
