@@ -426,10 +426,10 @@ typeStatement (Declaration i t vn) = do lift $ lift $ typeExist t i
                                         (gst,lst) <- lift get
                                         when (Map.member vn lst) $ throwError $ DuplicateVariable vn i
                                         cte <- lift $ ask
-                                        case Map.lookup t cte  of
-                                          Nothing -> throwError $ MiscError "Bug in typeExist?"
-                                          Just (CT _ _ _ _ _ mods) -> when (not $ Map.member t primitiveTypesMap) $
-                                                                        when (any (==Static) mods) $ throwError $ StaticClass i t
+                                        when (not $ Map.member t primitiveTypesMap) $ do
+                                          case Map.lookup t cte  of
+                                            Nothing -> throwError $ MiscError "Bug in typeExist?"
+                                            Just (CT _ _ _ _ _ mods) -> when (any (==Static) mods) $ throwError $ StaticClass i t
                                         let tt = TRef $ typename2Type t
                                         lift $ put (gst, Map.insert vn tt lst)
                                         return $ Declaration (i,tt) t vn
