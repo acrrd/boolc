@@ -36,7 +36,7 @@ parserTests =
          testGroup "Assign" $ tests_assignStatement parseStatement,
          testGroup "If" $ tests_ifStatement parseStatement,
          testGroup "While" $ tests_whileStatement parseStatement,
-         testGroup "Return" $ tests_whileStatement parseStatement,
+         testGroup "Return" $ tests_returnStatement parseStatement,
          testGroup "Block" $ tests_whileStatement parseStatement
          ],
        testGroup "Declaration" [
