@@ -220,7 +220,8 @@ parseWhileStatement = liftM3 While parsePos parseCond parseStatement
         parseCond = parens parseExpression
 
 parseReturnStatement :: Parser StatementSP
-parseReturnStatement = endStm $ liftM2 Return parsePos parseExpression
+parseReturnStatement = do pos <- parsePos
+                          endStm $ liftM2 Return (return pos) $ option (Void pos) parseExpression
   where parsePos = reserved "return" >> getPosition
 
 parseBlockStatement :: Parser StatementSP
