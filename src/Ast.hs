@@ -1,5 +1,7 @@
 module Ast where
 
+import Types
+
 type Operation = String
 type VarName = String
 type TypeName = String
@@ -18,7 +20,7 @@ data Expression a = I a Int | B a Bool | S a String| Var a VarName
                   | Cast a TypeName (Expression a)
                   | FieldAccess a FieldName (Expression a)
                   | MethodCall a MethodName [Expression a] (Expression a)
-                  | StaticMethodCall a MethodName [Expression a] ClassName
+                  | StaticMethodCall a MethodName [Expression a] ClassName [Type]
                   | New a TypeName [Expression a]
                   | DeRef a (Expression a)
                   deriving(Show,Eq)

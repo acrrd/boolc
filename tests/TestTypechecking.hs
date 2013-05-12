@@ -8,6 +8,7 @@ import Text.ParserCombinators.Parsec hiding (parseTest)
 
 import Ast
 import Typesystem
+import Types
 
 import Control.Monad
 import Control.Monad.Error

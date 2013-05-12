@@ -4,6 +4,7 @@ import Ast
 import AstUtils
 import Parser
 import Typesystem
+import LLVM
 import ToLLVM
 
 import Text.ParserCombinators.Parsec (ParseError)

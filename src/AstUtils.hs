@@ -45,7 +45,7 @@ desugar (Program cds) = Program $ map desugarCD cds
         desugarExp (Cast i t e) = liftM (Cast i t) $ desugarExp e
         desugarExp (FieldAccess i fn e) = liftM (DeRef i . (FieldAccess i fn)) $ desugarExp e
         desugarExp (MethodCall i mn ps e) = liftM2 (MethodCall i mn) (mapM desugarExp ps) (desugarExp e)
-        desugarExp (StaticMethodCall i mn ps cn) = liftM2 (StaticMethodCall i mn) (mapM desugarExp ps) (return cn)
+        desugarExp (StaticMethodCall i mn ps cn sig) = liftM3 (StaticMethodCall i mn) (mapM desugarExp ps) (return cn) (return sig)
         desugarExp (New i t ps) = liftM (New i t) $ mapM desugarExp ps
         desugarExp v@(Var i vn) = do s <- get
                                      if (Set.member vn s) then return $ DeRef i v 

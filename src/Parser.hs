@@ -8,6 +8,8 @@ import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language
 import qualified Text.ParserCombinators.Parsec.Token as Token
 
+import Debug.Trace
+
 type SourcePosInfo = SourcePos
 type ExpressionSP = Expression SourcePosInfo
 type StatementSP = Statement SourcePosInfo
@@ -75,7 +77,6 @@ parseBool = do whiteSpace
                r <- parseProgram
                eof
                return r
-
 
 reservedOpR :: String -> Parser String
 reservedOpR op = do currentop <- lookAhead oper                   
@@ -239,7 +240,7 @@ parseMethodDecl = liftM5 MethodDecl getPosition parseType identifier parseParame
         parseBody = parseBlockStatement
 
 parseMember :: Parser MemberSP
-parseMember =  (try $ liftM M parseMethodDecl)
+parseMember =  ((try $ lookAhead (parseType >> identifier >> char '(')) >> liftM M parseMethodDecl)
                <|> liftM F parseFieldDecl
 
 parseClassDecl :: Parser ClassDeclSP

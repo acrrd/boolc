@@ -1,6 +1,7 @@
 module Typesystem where
 
 import Ast
+import Types
 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -10,10 +11,6 @@ import Control.Monad.State
 import Control.Monad.Reader
 import Data.Functor.Identity
 import Data.List
-
-data Type = TInt | TBool | TString | TVoid | TNull
-          | TObjId ClassName | TRef Type
-          deriving (Eq,Show)
 
 type ExpressionT a = Expression (a,Type)
 type StatementT a = Statement (a,Type)
@@ -83,9 +80,14 @@ getParametersType = map (\(ParameterDecl _ t _) -> typename2Type t)
 
 buildInTypes :: ClassTypeEnv
 buildInTypes = Map.insert "Object" (CT "Object" "" [] me me []) $
-               Map.insert "System" (CT "System" "" [] me me [Final,Static]) me
+               Map.insert "System" (CT "System" "" [] me sysmethods [Final,Static]) me
   where me = Map.empty
-
+        printst = ([[TBool],[TInt],[TString]],TVoid)
+        sysmethods = Map.fromList [("rand",([[]],TInt)),
+                                   ("print",printst),
+                                   ("printLn",printst)
+                                  ]
+        
 globalSymbols :: Map.Map VarName Type
 globalSymbols = Map.empty
 
@@ -229,7 +231,7 @@ getExpType (Not (_,t) _) = t
 getExpType (Cast (_,t) _ _) = t
 getExpType (FieldAccess (_,t) fn e) = t
 getExpType (MethodCall (_,t) _ _ _) = t
-getExpType (StaticMethodCall (_,t) _ _ _) = t
+getExpType (StaticMethodCall (_,t) _ _ _ _) = t
 getExpType (New (_,t) _ _) = t
 getExpType (DeRef (_,t) _) = t
 getExpType (ClassSymbol (_,t) _) = t
@@ -270,15 +272,15 @@ typeExp (MethodCall i mn ps e) = do
   ee <- typeExpGetSymbol e
   ps' <- mapM typeExp ps
   case ee of
-    ClassSymbol (_,t) x -> do (ps,rt) <- typeMethodCall i (TObjId x) mn ps'
-                              return $ StaticMethodCall (i,rt) mn ps x
+    ClassSymbol (_,t) x -> do (ps,rt,sig) <- typeMethodCall i (TObjId x) mn ps'
+                              return $ StaticMethodCall (i,rt) mn ps x sig
     _ -> do let et = getExpType ee
-            (ps,rt) <- typeMethodCall i et mn ps'
+            (ps,rt,_) <- typeMethodCall i et mn ps'
             return $ MethodCall (i,rt) mn ps ee
   
   where typeMethodCall i t mn ps' = do (psts,rt) <- lift $ getMethodType i t mn
-                                       ps <- lift $ typeParameters i psts ps'
-                                       return (ps,rt)
+                                       (ps,sig) <- lift $ typeParameters i psts ps'
+                                       return (ps,rt,sig)
         typeExpGetSymbol :: Expression a ->  TypeExpressionEnv a (ExpressionT a)
         typeExpGetSymbol e = do typeExp e
                                 `catchError`
@@ -298,7 +300,7 @@ typeExp (New i cn ps) = do (CT _ _ kn fm _ mods) <- lift $ getClassType i cn
                            when (any (==Static) mods) $ throwError $ StaticClass i cn
                            kt <- lift $ getContructorType i cn
                            ps' <- mapM typeExp ps
-                           ps'' <- lift $ typeParameters i [kt] ps'
+                           (ps'',_) <- lift $ typeParameters i [kt] ps'
                            return $ New (i,typename2Type cn) cn ps''
 typeExp (DeRef i e) = do ee <- typeExp e
                          let t = getExpType ee
@@ -402,12 +404,13 @@ typeUnaryOp op i n e expectedts rett = do ee <- typeExp e
                                             $ throwError $ InvalidUnaOperandsError i op et
                                           return $ n (i,rett) ee
 
-typeParameters :: a -> [[Type]] -> [ExpressionT a] -> TypesystemEnv a [ExpressionT a]
-typeParameters i psts ps' = do if null psts && null ps' then return []
+typeParameters :: a -> [[Type]] -> [ExpressionT a] -> TypesystemEnv a ([ExpressionT a],[Type])
+typeParameters i psts ps' = do if null psts && null ps' then return ([],[])
                                  else do let pst' = map getExpType ps'
                                          typesOk <- filterM (typeParam i pst') psts
                                          when (null typesOk) $ throwError $ ParameterTypeError i psts pst'
-                                         return $ fixNullType (typesOk !! 0) ps'
+                                         let ts = (typesOk !! 0)
+                                         return $ (fixNullType ts ps',ts)
                                          
   where typeParam :: a -> [Type] -> [Type] -> TypesystemEnv a Bool
         typeParam i pst' pst =  do if length pst /= length pst' then return False
