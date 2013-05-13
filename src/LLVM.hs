@@ -2,6 +2,7 @@ module LLVM where
 
 import Prelude hiding (and,not)
 
+import Data.Char (isDigit)
 import Data.List
 import Data.Int
 import qualified Data.Map as M
@@ -136,6 +137,18 @@ addGlobalString strvalue strname = do
                   lift $ setGlobalStringMap $ M.insert strvalue v gsm
                   return v
 
+getValueNameRaw :: Value -> CodeGenFunction String
+getValueNameRaw v = lift2 $ (FFI.getValueName v >>= peekCString)
+
+getValueName :: Value -> CodeGenFunction String
+getValueName v = do name <- getValueNameRaw v
+                    return $ reverse $ dropWhile isDigit $ reverse name
+
+getValueNamePtr :: Value -> CodeGenFunction CString
+getValueNamePtr v = do
+  name <- getValueName v
+  lift2 $ withCString name $ \namePtr -> return namePtr
+
 constInt :: Type -> Int -> Value
 constInt t v = do
   FFI.constInt t (fromIntegral v) (fromIntegral 1)
@@ -229,17 +242,20 @@ abinop op vl vr id = do
 add = abinop FFI.buildAdd
 sub = abinop FFI.buildSub
 and = abinop FFI.buildAnd
+mul = abinop FFI.buildMul
+div = abinop FFI.buildSDiv
+rem = abinop FFI.buildSRem
 
 not :: Value -> CodeGenFunction Value
 not v = do
   builder <- getBuilder
-  namePtr <- lift2 $ FFI.getValueName v
+  namePtr <- getValueNamePtr v
   lift2 $ FFI.buildNot builder v namePtr
   
 neg :: Value -> CodeGenFunction Value
 neg v = do
   builder <- getBuilder
-  namePtr <- lift2 $ FFI.getValueName v
+  namePtr <- getValueNamePtr v
   lift2 $ FFI.buildNeg builder v namePtr
 
 data CmpOp = IEq | INe | IUgt | IUge | IUlt | IUle | ISgt | ISge | ISlt | ISle
@@ -292,7 +308,7 @@ store src dst = do
 load :: Value -> CodeGenFunction Value
 load src = do
   builder <- getBuilder
-  namePtr <- lift2 $ FFI.getValueName src
+  namePtr <- getValueNamePtr src
   lift2 $ FFI.buildLoad builder src namePtr
 
 structGEP :: Value -> Int -> String -> CodeGenFunction Value
@@ -323,7 +339,7 @@ call fun params name = do
 bitCast :: Value -> Type -> CodeGenFunction Value
 bitCast value t = do
   builder <- getBuilder
-  namePtr <- lift2 $ FFI.getValueName value
+  namePtr <- getValueNamePtr value
   name <- lift2 $ peekCString namePtr
   lift2 $ withCString name $ \namePtr ->
     FFI.buildBitCast builder value t namePtr
@@ -340,9 +356,10 @@ alloca t name = do
   lift2 $ withCString name $ \namePtr ->
     FFI.buildAlloca builder t namePtr
 
-allocaFromValue :: Value -> String -> CodeGenFunction Value
-allocaFromValue v name = do
+allocaFromValue :: Value -> CodeGenFunction Value
+allocaFromValue v = do
   t <- lift2 $ FFI.typeOf v
+  name <- getValueName v
   alloca t name
 
 br :: BasicBlock -> CodeGenFunction ()

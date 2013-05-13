@@ -12,6 +12,8 @@ import Control.Monad.Reader
 import Data.Functor.Identity
 import Data.List
 
+import Debug.Trace
+
 type ExpressionT a = Expression (a,Type)
 type StatementT a = Statement (a,Type)
 type ParameterDeclT a = ParameterDecl (a,Type)
@@ -83,9 +85,10 @@ buildInTypes = Map.insert "Object" (CT "Object" "" [] me me []) $
                Map.insert "System" (CT "System" "" [] me sysmethods [Final,Static]) me
   where me = Map.empty
         printst = ([[TBool],[TInt],[TString]],TVoid)
-        sysmethods = Map.fromList [("rand",([[]],TInt)),
+        sysmethods = Map.fromList [("srand",([[]],TVoid)),
+                                   ("rand",([[]],TInt)),
                                    ("print",printst),
-                                   ("printLn",printst)
+                                   ("println",printst)
                                   ]
         
 globalSymbols :: Map.Map VarName Type
@@ -251,7 +254,7 @@ typeExp (Var i x) = do (gst,lst) <- get
 typeExp (Additive i op l r) = typeBinOp op i Additive l r [TInt] TInt
 typeExp (Multiplicative i op l r) = typeBinOp op i Multiplicative l r [TInt] TInt
 typeExp (Relational i op l r) = typeBinOp op i Relational l r [TInt] TBool
-typeExp (Equality i op l r) = typeBinOp op i Equality l r [TInt,TBool] TBool
+typeExp (Equality i op l r) = typeBinOpWithClass op i Equality l r [TInt,TBool] TBool
 typeExp (Boolean i op l r) = typeBinOp op i Boolean l r [TBool] TBool
 typeExp (Negative i e) = typeUnaryOp "-" i Negative e [TInt] TInt
 typeExp (Not i e) = typeUnaryOp "!" i Not e [TBool] TBool
@@ -384,17 +387,41 @@ isSubType (TObjId t) b@(TObjId _) i = do (CT _ pn _ _ _ _) <- getClassType i t
                                                     else isSubType (TObjId pn) b i
 isSubType _ _ _  = return False
 
+updateType t = fmap (\(i,_) -> (i,t))
 
-typeBinOp :: Operation -> a -> ((a,Type) -> Operation -> ExpressionT a -> ExpressionT a -> ExpressionT a) ->
-             (Expression a) -> (Expression a) -> 
-             [Type] -> Type -> TypeExpressionEnv a (ExpressionT a)
-typeBinOp op i n l r expectedts rett = do le <- typeExp l
-                                          re <- typeExp r
-                                          let lt = getExpType le
-                                          let rt = getExpType re
-                                          when (lt /= rt || (and $ map (lt/=) expectedts))
-                                            $ throwError $ InvalidBinOperandsError i op lt rt
-                                          return $ n (i,rett) op le re
+typeBinOp = typeBinOpBase False
+typeBinOpWithClass = typeBinOpBase True
+typeBinOpBase :: Bool 
+              -> Operation -> a 
+              -> ((a,Type) -> Operation -> ExpressionT a -> ExpressionT a -> ExpressionT a) 
+              -> Expression a -> Expression a 
+              -> [Type] -> Type 
+              -> TypeExpressionEnv a (ExpressionT a)
+typeBinOpBase  allowclasses op i n l r expectedts rett = do 
+  le <- typeExp l
+  re <- typeExp r
+  let lt = getExpType le
+  let rt = getExpType re
+  
+  let partialret = \l r -> return $ n (i,rett) op l r
+  let ret = return $ n (i,rett) op le re
+  let err = throwError $ InvalidBinOperandsError i op lt rt
+  
+  if allowclasses &&  classType lt && classType rt 
+    then case (lt,rt) of 
+           (TNull,TNull) -> partialret (updateType (TObjId "Object") le ) (updateType (TObjId "Object") re)
+           (TNull,TObjId _) -> partialret (updateType rt le) re
+           (TObjId _,TNull) -> partialret le (updateType lt re)
+           (_,_) -> ret
+    else if (lt /= rt || (and $ map (lt/=) expectedts)) 
+         then err
+         else ret
+
+  where classType t = 
+          case t of
+            TObjId _ -> True
+            TNull -> True
+            _ -> False
 
 typeUnaryOp :: Operation -> a -> ((a,Type) -> ExpressionT a -> ExpressionT a) ->
                (Expression a) -> [Type] -> Type -> TypeExpressionEnv a (ExpressionT a)
@@ -467,7 +494,9 @@ typeStatement (Return i e ) = do ee <- lift $ typeExp e
                                  rt <- ask
                                  sub <- lift $ lift $ isSubType et rt i
                                  when (not sub) $ throwError $ IncompatibleType i et [rt]
-                                 return $ Return (i,rt) ee
+                                 case et of
+                                   TNull -> return  $ Return (i,rt) $ updateType rt ee
+                                   _ -> return $ Return (i,rt) ee
 typeStatement (Block ss) = liftM Block $ mapM typeStatement ss
 
 

@@ -127,7 +127,13 @@ tests_ExpBinOp tc =
     testCase "binop18" $ testTCExpEmpty tc (Negative () int) TInt,
     testCase "binop19" $ testTCExpEmptyFail tc (Negative () str),
     testCase "binop20" $ testTCExpEmpty tc (Not () bool) TBool,
-    testCase "binop21" $ testTCExpEmptyFail tc (Not () int)
+    testCase "binop21" $ testTCExpEmptyFail tc (Not () int),
+    testCase "binop22" $ testTCExp tc me me ctea (eq null null) TBool,
+    testCase "binop23" $ testTCExp tc me me ctea (eq null obj) TBool,
+    testCase "binop24" $ testTCExp tc me me ctea (eq obj null) TBool,
+    testCase "binop25" $ testTCExp tc me me ctea (eq obj obj) TBool,
+    testCase "binop26" $ testTCExpFail tc me me ctea (eq obj int),
+    testCase "binop27" $ testTCExpFail tc me me ctea (eq null int)
   ]
   where me = Map.empty
         int = (I () 0)
@@ -137,6 +143,9 @@ tests_ExpBinOp tc =
         mult = Multiplicative () "*"
         rel = Relational () "<"
         eq = Equality () "=="
+        null = Null ()
+        obj = New () "A" []
+        ctea = Map.insert "A" (CT "A" "" [] me me []) me        
 
 tests_ExpNew tc = 
   [

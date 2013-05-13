@@ -6,10 +6,11 @@ import Ast
 import qualified Typesystem as T
 import qualified Types as T
 
-import LLVM hiding (not)
+import LLVM hiding (not,div,rem)
 import qualified LLVM as L
 import qualified LLVM.FFI.Core as FFI
 
+import Data.Char (isDigit)
 import Data.List ((\\),union)
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -28,6 +29,7 @@ genLLVMCode p cte output = do
   modul <- createModule output
   runCodeGenModule modul genModule
   writeBitcodeToFile output modul
+
   where genModule = do
           sci <- staticClassInfos
           genProgram p cte sci "Main" "main"
@@ -73,11 +75,13 @@ staticClassInfos = do
 
 buildSystemStaticClassInfo :: CodeGenModule StaticMethodsTable
 buildSystemStaticClassInfo = do
+  srandsigs <- srand
   randsigs <- rand
   (printssig,printlnssig) <- prints
-
   
-  let m = [("rand",randsigs),("print",printssig),("printLn",printlnssig)]
+  
+  let m = [("srand",srandsigs),("rand",randsigs),
+           ("print",printssig),("println",printlnssig)]
   return $ M.fromList m
 
   where
@@ -87,6 +91,22 @@ buildSystemStaticClassInfo = do
       randt <- lift $ functionType False randrt []
       randv <- newNamedFunction FFI.ExternalLinkage ("rand") randt []
       return $ M.insert [] randv me
+    srand = do
+      let srandrt = FFI.voidType
+      srandt <- lift $ functionType False srandrt [FFI.int32Type]
+      srandv <- newNamedFunction FFI.ExternalLinkage ("srand") srandt []
+
+      let wrapsrandrt = FFI.voidType
+      wrapsrandt <- lift $ functionType False wrapsrandrt []
+      wrapsrandv <- newNamedFunction FFI.ExternalLinkage ("wrapsrand") wrapsrandt []
+
+      defineFunction wrapsrandv $ \_ -> do
+        r <- tmpVal $ alloca FFI.int32Type
+        r' <- load r
+        tmpVal $ call srandv [r']
+        retVoid
+
+      return $ M.insert [] wrapsrandv me
     prints = do
       let stringt = (FFI.pointerType FFI.int8Type 0)
       let printfrt = FFI.int32Type
@@ -149,10 +169,20 @@ genConstrSym :: String -> String
 genConstrSym = (".constr." ++)
 
 genUserVarSym :: String -> String
-genUserVarSym = (".u." ++)
+genUserVarSym s = ".u." ++ s ++ "."
 
 genInternalVarSym :: String -> String
-genInternalVarSym = (".i." ++)
+genInternalVarSym s = ".i." ++ s ++ "."
+
+genMemberAccessSym :: String -> String -> String
+genMemberAccessSym tn mn = 
+  let prefix = ".m" 
+      tn' = if not $ null tn then if last tn == '.' then tn  else tn ++ "."
+                             else ""                                     
+      base = tn' ++ mn 
+  in
+    if prefix == take (length prefix) tn then base
+                                         else prefix ++ base     
 
 tmpVal :: (String -> a) -> a
 tmpVal = ($ ".t")
@@ -270,7 +300,8 @@ type LLVMCodeGenMethod = ReaderT (ClassInfoEnv,StaticClassInfos) CodeGenModule
 type LLVMCodeGen = StateT VarMap (ReaderT (ClassInfoEnv,StaticClassInfos) CodeGenFunction)
 
 deSymParametersName = map (\(n,v) -> (deSymParameterName n,v))
-deSymParameterName = drop (length $ genUserVarSym "")
+deSymParameterName s = let suf = drop ((length $ genUserVarSym "") -1) s
+                           pre = take (length suf - 1) suf in pre
 
 makeMethodType :: ClassInfoEnv -> Type -> [T.Type] -> T.Type -> IO Type
 makeMethodType cie ct pts rt = do
@@ -307,11 +338,13 @@ getMethod = getMember methodOffsets
 getMember :: (ClassInfo -> M.Map String Int) -> Value -> ClassName -> String -> LLVMCodeGen Value
 getMember getter this cn mn = do
   indexs <- getMemberIndex getter cn mn [0]
-  lift $ lift $ tmpVal $ gep this indexs
+  thisname <- lift2 $ getValueNameRaw this
+  let name = genMemberAccessSym thisname mn
+  lift $ lift $ gep this indexs name
 
   where getMemberIndex :: (ClassInfo -> M.Map String Int) -> ClassName -> String -> [Int] -> LLVMCodeGen [Int]
         getMemberIndex getter cn mn index = do
-          when (null cn) $ error "Member not found"
+          when (null cn) $ error $ "Member ("++mn++") not found"
           (cie,_) <- ask
           ci <- case M.lookup cn cie of
             Nothing -> error "Class is not in environment"
@@ -397,6 +430,7 @@ genClass cte (ClassDecl _ cn _ fs ms) = do
                       method <- runLLVMCodeGen M.empty env (getMethod this cn mn)
                       store mv method
 
+
 getMethodClassType :: T.ClassTypeEnv -> ClassName -> MethodName -> LLVMCodeGenMethod ClassInfo
 getMethodClassType cte cn mn = do
   (cie,_) <- ask
@@ -422,7 +456,8 @@ genMethod cte cn (MethodDecl (_,rt) _ mn ps body) = do
   lift $ defineFunction mv $ \params -> do
     let this = params !! 0
     thiscast <- bitCast (snd this) $ FFI.pointerType (classType ci) 0        
-    paramsmap' <- foldM (\a (n,v) -> do v' <- allocaFromValue v n
+    paramsmap' <- foldM (\a (n,v) -> do v' <- allocaFromValue v
+                                        store v v'
                                         return $ M.insert (deSymParameterName n) v' a
                        ) M.empty $ drop 1 params
     let paramsmap = M.insert  (deSymParameterName $ fst this) thiscast paramsmap'
@@ -515,6 +550,7 @@ genExp = genE
         genE (Equality _ op l r) = binOp op l r
         genE (Relational _ op l r) = binOp op l r
         genE (Additive _ op l r) = binOp op l r
+        genE (Multiplicative _ op l r) = binOp op l r
         genE (Boolean _ op l r) = 
           case op of
                "&&" -> and l r
@@ -533,9 +569,9 @@ genExp = genE
 
         opSem :: M.Map Operation (Value -> Value -> String -> CodeGenFunction Value)
         opSem = M.fromList [("==",iCmp IEq),("!=",iCmp INe),
-                               ("<",iCmp ISlt),("<=",iCmp ISle),(">",iCmp ISgt),(">=",iCmp ISge),
-                               ("+",add),("-",sub)
-                              ]
+                            ("<",iCmp ISlt),("<=",iCmp ISle),(">",iCmp ISgt),(">=",iCmp ISge),
+                            ("+",add),("-",sub),("*",mul),("/",L.div),("%",L.rem)
+                           ]
         and :: T.ExpressionT a -> T.ExpressionT a -> LLVMCodeGen Value
         and l r = do
           end <- lift2 $ newNamedBasicBlock ".l.a-end"
@@ -625,7 +661,7 @@ genStatement retbb (While _ ce s) = do
   
   lift2 $ defineBasicBlock body  
   term <- genStatement retbb s
-  when (not term) $ lift2 $ br body
+  when (not term) $ lift2 $ br cond
   
   if term 
     then lift4 $ FFI.deleteBasicBlock end

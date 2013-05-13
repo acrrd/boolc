@@ -49,7 +49,7 @@ languageDef = emptyDef
                                     ,"==","!="
                                     ,"<","<=",">",">="
                                     ,"+","-"
-                                    ,"*","/"
+                                    ,"*","/","%"
                                     ,"!"
                                     ,"="
                                    ]
@@ -151,7 +151,7 @@ parseUnaryExpression = liftM3 (const.Negative) getPosition (reservedOp "-") pars
 
 parseMultiplicativeExpression :: Parser ExpressionSP
 parseMultiplicativeExpression =
-  parseBinaryExpression parseUnaryExpression Multiplicative ["*","/"]
+  parseBinaryExpression parseUnaryExpression Multiplicative ["*","/","%"]
 
 parseAdditiveExpression :: Parser ExpressionSP
 parseAdditiveExpression =
