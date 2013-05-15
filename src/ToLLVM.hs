@@ -20,7 +20,7 @@ import Control.Monad.State
 import Control.Monad.Reader
 
 import Foreign.Marshal.Array (withArrayLen)
-import Foreign.C.String (peekCString)
+import Foreign.C.String (peekCString,withCString,newCString)
 
 import Debug.Trace
 
@@ -50,15 +50,27 @@ lift4 f = (lift3 . lift) f
 
 builtInClassInfoObject :: Type -> CodeGenModule ClassInfo
 builtInClassInfoObject ct = do
-  lift $ structSetBody ct [FFI.int8Type] False
+  let hierarchyt = FFI.pointerType (FFI.pointerType FFI.int8Type 0) 0
+  let ctnamet = (FFI.pointerType FFI.int8Type 0)
+  lift $ structSetBody ct [hierarchyt,ctnamet] False
   kv <- makeConstr ct
   return $ ClassInfo ct "" kv filedoffset methodoffset
 
-  where filedoffset = M.fromList $ [(".dummy",0)]
+  where filedoffset = M.fromList $ [(".hierarchy",0),(".ctname",1)]
         methodoffset = M.empty
-        makeConstr ct = do kt <- lift $ functionType False FFI.voidType [FFI.pointerType ct 0]
+        makeConstr ct = do let hierarchyt = FFI.pointerType (FFI.pointerType FFI.int8Type 0) 0
+                           kt <- lift $ functionType False FFI.voidType [FFI.pointerType ct 0]
                            kv <- newNamedFunction FFI.ExternalLinkage (genConstrSym "Object") kt []
-                           defineFunction kv $ \_ -> retVoid
+                           defineFunction kv $ \params -> do
+                             let thisv = snd $ params !! 0
+                             scnv <- addGlobalString "Object" ".str"
+                             cnv <- gep thisv [0,1] ".ctname"
+                             store scnv cnv
+                             av <- genHierarchy "Object" ["Object"] 
+                             h <-  gep thisv [0,0] ".hierarchy"
+                             av' <- bitCast av $ hierarchyt
+                             store av' h
+                             retVoid
                            return kv
 
 builtInClassInfoMap :: M.Map ClassName (Type -> CodeGenModule ClassInfo)
@@ -78,14 +90,28 @@ buildSystemStaticClassInfo = do
   srandsigs <- srand
   randsigs <- rand
   (printssig,printlnssig) <- prints
-  
+  runtime_castcheckv <- runtime_castcheck
   
   let m = [("srand",srandsigs),("rand",randsigs),
-           ("print",printssig),("println",printlnssig)]
+           ("print",printssig),("println",printlnssig),
+           (".runtime_castcheck",runtime_castcheckv)
+          ]
   return $ M.fromList m
 
   where
     me = M.empty
+    runtime_castcheck = do
+      let stringt = (FFI.pointerType FFI.int8Type 0)
+      {--
+      let strcmprt = FFI.int32Type
+      
+      strcmpt <- lift $ functionType False randrt [stringt,stringt]
+      strcmpv <- newNamedFunction FFI.ExternalLinkage ("strcmp") strcmp []
+      --}
+      let checkrt = FFI.voidType
+      checkt <- lift $ functionType False checkrt [stringt,FFI.pointerType stringt 0,FFI.int32Type]
+      checkv <- newNamedFunction FFI.ExternalLinkage ("runtime_castcheck") checkt []
+      return $ M.insert [] checkv me
     rand = do
       let randrt = FFI.int32Type
       randt <- lift $ functionType False randrt []
@@ -405,7 +431,7 @@ genClass cte (ClassDecl _ cn _ fs ms) = do
             pci <-lift2 $ getClassInfo cie $ parentName ci
             let kv = constr ci
             let pkv = constr pci
-
+            
             lift $ defineFunction kv $ \params' -> do
               let params = deSymParametersName params'
               let ppslen = (length params) - (length fs)
@@ -414,12 +440,20 @@ genClass cte (ClassDecl _ cn _ fs ms) = do
               let this = ppvs' !! 0
               thiscast <- bitCast this (FFI.pointerType (classType pci) 0)
               let ppvs = (thiscast:(drop 1 ppvs'))
-
               let cps = drop ppslen params
-                  
+              let hierarchyt = FFI.pointerType (FFI.pointerType FFI.int8Type 0) 0
+              
               tmpVal $ call pkv ppvs
               mapM (uncurry $ initField env this cn) cps
               mapM (uncurry $ initMethod env this cn) mvs
+              hierarchyv <- runLLVMCodeGen M.empty env (getField this cn ".hierarchy")
+              ctname <- runLLVMCodeGen M.empty env (getField this cn ".ctname")
+              
+              cnv <- addGlobalString cn ".str"
+              store cnv ctname
+              hv <- genHierarchy cn $ getHierarchy cie cn
+              hv' <- bitCast hv hierarchyt
+              store hv' hierarchyv
               retVoid
        
               where initField env this cn fn fv = do
@@ -429,7 +463,27 @@ genClass cte (ClassDecl _ cn _ fs ms) = do
                     initMethod env this cn mn mv = do
                       method <- runLLVMCodeGen M.empty env (getMethod this cn mn)
                       store mv method
+                     
+                    getHierarchy cie cn = 
+                      case M.lookup cn cie of
+                        Nothing -> []
+                        Just ci -> [cn]++(getHierarchy cie $ parentName ci)
 
+genHierarchy :: String -> [String] -> CodeGenFunction Value
+genHierarchy cn h = do
+  trace (show h) $ return ()
+  modul <- lift $ getModule
+  h' <- mapM (flip addGlobalString ".str") h
+  g <- lift2 $ withArrayLen h' $ \len ptr -> do
+         let stringt = FFI.pointerType FFI.int8Type 0
+         let at = FFI.arrayType stringt $ fromIntegral len
+         withCString (".hierarchy."++cn) $ \namePtr -> do
+           g <- FFI.addGlobal modul at namePtr
+           let arr = FFI.constArray stringt ptr $ fromIntegral len
+           FFI.setInitializer g arr
+           return arr
+  --  gep g [0] ".t"
+  return g
 
 getMethodClassType :: T.ClassTypeEnv -> ClassName -> MethodName -> LLVMCodeGenMethod ClassInfo
 getMethodClassType cte cn mn = do
@@ -532,14 +586,7 @@ genExp = genE
         genE (StaticMethodCall _ mn ps cn sig) = do
           (_,sci) <- ask
           vs <- mapM genE ps
-          mv <- case M.lookup cn sci of
-                  Nothing -> error $ cn ++ " is not in static environment"
-                  Just smt -> case M.lookup mn smt of
-                    Nothing -> error $ mn ++ " is not a static method"
-                    Just sm -> case M.lookup sig sm of
-                      Nothing -> error "Signature not exist"
-                      Just mv -> return mv
-                      
+          mv <- getStaticCallValue sci cn mn sig
           lift2 $ tmpVal $ call mv vs
         genE (Not _ e) = do
           ev <- genE e
@@ -556,7 +603,34 @@ genExp = genE
                "&&" -> and l r
                "||" -> or l r
                _  -> error $ "Operation (" ++ op ++ ") not supported"
-        genE (Cast i t e) = error "Cast is not implemented"
+        genE (Cast _ tn e) = do
+          let stringt = FFI.pointerType FFI.int8Type 0
+          let hierarchyt = FFI.pointerType stringt 0    
+          (_,sci) <- ask
+          ev <- genE e
+          let t = T.getExpType e
+          if T.primitiveType t then return ev
+            else do
+             checkcastv <- getStaticCallValue sci "System" ".runtime_castcheck" []
+             cn <- getClassName t
+             ctnv <- getField ev cn ".ctname"
+             hv <- getField ev cn ".hierarchy"
+             hv' <- lift2 $ load hv
+             ctnv' <- lift2 $ load ctnv
+             ts <- lift4 $ newCString tn
+             tnv <- lift2 $ addGlobalString tn ".str"
+             tnv' <- lift2 $ bitCast tnv stringt
+             let tv = FFI.constString ts (fromIntegral $ length tn) (fromIntegral 0)
+--             tv' <- lift2 $ bitCast tv stringt
+--             let tv' = FFI.constNull stringt
+             let tv' = tnv'
+             let len = FFI.constInt FFI.int32Type (fromIntegral 1) (fromIntegral 0)
+             lift2 $ tmpVal $ call checkcastv [ctnv',hv',len]
+             return ev
+              
+              where getClassName (T.TObjId cn) = return cn
+                    getClassName _ = error "Not a class"
+
         genE _ = error "Expression not implemented"
         
         binOp :: Operation -> T.ExpressionT a -> T.ExpressionT a -> LLVMCodeGen Value
@@ -605,6 +679,15 @@ genExp = genE
           
           lift2 $ defineBasicBlock end
           lift2 $ tmpVal $ phi [int1 True,rv] [best,worst']
+
+getStaticCallValue sci cn mn sig = do
+  case M.lookup cn sci of
+    Nothing -> error $ cn ++ " is not in static environment"
+    Just smt -> case M.lookup mn smt of
+      Nothing -> error $ mn ++ " is not a static method"
+      Just sm -> case M.lookup sig sm of
+        Nothing -> error "Signature not exist"
+        Just mv -> return mv
 
 genStatement :: BasicBlock -> (T.StatementT a) -> LLVMCodeGen Bool
 genStatement retbb (Block ss) = foldM (\term s -> if term then return True

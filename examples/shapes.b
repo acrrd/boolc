@@ -7,8 +7,9 @@ class Main {
     this.moveAndDraw(s1);
     this.moveAndDraw(s2);
 
-    /*Rectangle arect = new Rectangle(0, 0, 15, 15);
-    arect.setWidth(30);
+    Object rect;
+    rect = (Object) s1;
+/*        arect.setWidth(30);
     arect.draw(); */
   }
 
@@ -17,7 +18,7 @@ class Main {
     s.draw();
     s.rMoveTo(100, 100);
     s.draw();
-  }
+  } 
 }
 
 class Shape {
@@ -67,3 +68,4 @@ class Circle extends Shape {
     System.print(this.getY()); System.print("), radius "); System.println(this.getRadius());
   }
 }
+

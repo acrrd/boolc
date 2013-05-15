@@ -72,6 +72,14 @@ primitiveTypesMap :: Map.Map TypeName Type
 primitiveTypesMap = foldr (uncurry Map.insert) Map.empty
                     [("int",TInt),("bool",TBool),("string",TString),("void",TVoid)]
 
+classType t = 
+  case t of
+    TObjId _ -> True
+    TNull -> True
+    _ -> False
+
+primitiveType = not . classType 
+
 typename2Type :: TypeName -> Type
 typename2Type s = case Map.lookup s primitiveTypesMap of
                     Just t -> t
@@ -416,12 +424,6 @@ typeBinOpBase  allowclasses op i n l r expectedts rett = do
     else if (lt /= rt || (and $ map (lt/=) expectedts)) 
          then err
          else ret
-
-  where classType t = 
-          case t of
-            TObjId _ -> True
-            TNull -> True
-            _ -> False
 
 typeUnaryOp :: Operation -> a -> ((a,Type) -> ExpressionT a -> ExpressionT a) ->
                (Expression a) -> [Type] -> Type -> TypeExpressionEnv a (ExpressionT a)
