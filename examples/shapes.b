@@ -7,10 +7,11 @@ class Main {
     this.moveAndDraw(s1);
     this.moveAndDraw(s2);
 
-/*    Shape rect;
-    rect = (Circle) s1;
-    arect.setWidth(30);
-    arect.draw(); */
+    Rectangle rect;
+    rect = (Rectangle) s1;
+    rect.setWidth(30);
+    rect.draw();
+    //rect = (Rectangle) s2;
   }
 
   void moveAndDraw(Shape s)
