@@ -7,9 +7,9 @@ class Main {
     this.moveAndDraw(s1);
     this.moveAndDraw(s2);
 
-    Object rect;
-    rect = (Object) s1;
-/*        arect.setWidth(30);
+/*    Shape rect;
+    rect = (Circle) s1;
+    arect.setWidth(30);
     arect.draw(); */
   }
 

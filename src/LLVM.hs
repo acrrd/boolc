@@ -20,16 +20,12 @@ import Foreign.Marshal.Utils (fromBool)
 import qualified LLVM.FFI.Core as FFI
 import qualified LLVM.FFI.BitWriter as FFI
 
-import Debug.Trace
-
 type Value = FFI.ValueRef
 type Type = FFI.TypeRef
 type Module = FFI.ModuleRef
 type Function = Value
 type Builder = FFI.BuilderRef
 type BasicBlock = FFI.BasicBlockRef
-
---mtrace s = trace s $ return ()
 
 createModule :: String -> IO Module
 createModule name =
@@ -344,11 +340,20 @@ bitCast value t = do
   lift2 $ withCString name $ \namePtr ->
     FFI.buildBitCast builder value t namePtr
 
+trunc :: Value -> Type -> CodeGenFunction Value
+trunc value t = do
+  builder <- getBuilder
+  namePtr <- getValueNamePtr value
+  name <- lift2 $ peekCString namePtr
+  lift2 $ withCString name $ \namePtr ->
+    FFI.buildTrunc builder value t namePtr
+
 malloc :: Type -> String -> CodeGenFunction Value
 malloc t name = do
-  builder <- getBuilder
-  lift2 $ withCString name $ \namePtr ->
-    FFI.buildMalloc builder t namePtr
+ builder <- getBuilder
+ lift2 $ withCString name $ \namePtr ->
+   FFI.buildMalloc builder t namePtr
+
 
 alloca :: Type -> String -> CodeGenFunction Value
 alloca t name = do
@@ -392,39 +397,3 @@ int1 b = FFI.constInt FFI.int1Type (fromIntegral v) (fromIntegral 0)
 
 int32 :: Int -> Value
 int32 v = FFI.constInt FFI.int32Type (fromIntegral v) (fromIntegral 1)
-
-{--
-printType v = do s <- showTypeOf v
-                 mtrace s
-
-showTypeOf :: Value -> IO String
-showTypeOf v = FFI.typeOf v >>= showType'
-
-showType' :: Type -> IO String
-showType' p = do
-    pk <- FFI.getTypeKind p
-    case pk of
-        FFI.VoidTypeKind -> return "()"
-	FFI.FloatTypeKind -> return "Float"
-	FFI.DoubleTypeKind -> return "Double"
-	FFI.X86_FP80TypeKind -> return "X86_FP80"
-	FFI.FP128TypeKind -> return "FP128"
-	FFI.PPC_FP128TypeKind -> return "PPC_FP128"
-	FFI.LabelTypeKind -> return "Label"
-	FFI.IntegerTypeKind -> do w <- FFI.getIntTypeWidth p; return $ "(IntN " ++ show w ++ ")"
-	FFI.FunctionTypeKind -> do
-            r <- FFI.getReturnType p
-	    c <- FFI.countParamTypes p
-	    let n = fromIntegral c
-	    as <- allocaArray n $ \ args -> do
-		     FFI.getParamTypes p args
-		     peekArray n args
-	    ts <- mapM showType' (as ++ [r])
-	    return $ "(" ++ intercalate " -> " ts ++ ")"
-	FFI.StructTypeKind -> do name <- FFI.getStructName p >>= peekCString
-                                 return "(Struct A {...})"
-	FFI.ArrayTypeKind -> do n <- FFI.getArrayLength p; t <- FFI.getElementType p >>= showType'; return $ "(Array " ++ show n ++ " " ++ t ++ ")"
-	FFI.PointerTypeKind -> do t <- FFI.getElementType p >>= showType'; return $ "(Ptr " ++ t ++ ")"
-	FFI.OpaqueTypeKind -> return "Opaque"
-	FFI.VectorTypeKind -> do n <- FFI.getVectorSize p; t <- FFI.getElementType p >>= showType'; return $ "(Vector " ++ show n ++ " " ++ t ++ ")"
---}

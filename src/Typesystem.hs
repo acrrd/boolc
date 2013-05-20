@@ -12,8 +12,6 @@ import Control.Monad.Reader
 import Data.Functor.Identity
 import Data.List
 
-import Debug.Trace
-
 type ExpressionT a = Expression (a,Type)
 type StatementT a = Statement (a,Type)
 type ParameterDeclT a = ParameterDecl (a,Type)
@@ -95,6 +93,8 @@ buildInTypes = Map.insert "Object" (CT "Object" "" [] me me []) $
         printst = ([[TBool],[TInt],[TString]],TVoid)
         sysmethods = Map.fromList [("srand",([[]],TVoid)),
                                    ("rand",([[]],TInt)),
+                                   ("heapsize",([[]],TInt)),
+                                   ("gcollect",([[]],TVoid)),
                                    ("print",printst),
                                    ("println",printst)
                                   ]
@@ -181,21 +181,23 @@ isWellFormed prog@(Program cds) = evalStateT (runReaderT (mapM_ (isWellFormed' c
 
         checkFieldParent :: FieldName -> a -> CheckMemberEnv a ()
         checkFieldParent f i = do parent <- getParentType
+                                  cn <- ask
                                   case parent of
                                     Nothing -> return ()
                                     Just (CT _ pn _ fs _ _) -> do
-                                      when (Map.member f fs) $ throwError $ FieldHiding f i pn
+                                      when (Map.member f fs) $ throwError $ FieldHiding f i cn
                                       if not $ null pn
                                         then local (const pn) $ checkFieldParent f i
                                         else return ()
 
         checkMethodParent :: MethodName -> MethodType -> a -> CheckMemberEnv a ()
         checkMethodParent m mt i = do parent <- getParentType
+                                      cn <- ask
                                       case parent of
                                         Nothing -> return ()
                                         Just (CT _ pn _ _ ms _) -> do
                                           case Map.lookup m ms of
-                                            Just mt' -> when (mt /= mt') $ throwError $ MethodOverload m i pn
+                                            Just mt' -> when (mt /= mt') $ throwError $ MethodOverload m i cn
                                             Nothing -> if not $ null pn 
                                                        then local (const pn) $ checkMethodParent m mt i
                                                        else return ()
@@ -274,7 +276,9 @@ typeExp (Cast i t e) = do lift $ typeExist t i
                           ctet <- lift $ isSubType ct et i
                           if not (etct || ctet)
                             then throwError $ IncompatibleType i et [ct]
-                            else return $ Cast (i,ct) t ee
+                            else case ee of
+                                   Null _ -> return $ Cast (i,ct) t $ updateType ct ee
+                                   _ -> return $ Cast (i,ct) t ee
 typeExp (FieldAccess i fn e) = do ee <- typeExp e
                                   let et = getExpType ee
                                   ft <- lift $ getFieldType i et fn

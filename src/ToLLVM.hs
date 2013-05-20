@@ -22,8 +22,6 @@ import Control.Monad.Reader
 import Foreign.Marshal.Array (withArrayLen)
 import Foreign.C.String (peekCString,withCString,newCString)
 
-import Debug.Trace
-
 genLLVMCode :: T.ProgramT a -> T.ClassTypeEnv -> FilePath -> IO ()
 genLLVMCode p cte output = do
   modul <- createModule output
@@ -51,25 +49,24 @@ lift4 f = (lift3 . lift) f
 builtInClassInfoObject :: Type -> CodeGenModule ClassInfo
 builtInClassInfoObject ct = do
   let hierarchyt = FFI.pointerType (FFI.pointerType FFI.int8Type 0) 0
-  let ctnamet = (FFI.pointerType FFI.int8Type 0)
-  lift $ structSetBody ct [hierarchyt,ctnamet] False
+  let hierarchylent = FFI.int32Type
+  lift $ structSetBody ct [hierarchyt,hierarchylent] False
   kv <- makeConstr ct
   return $ ClassInfo ct "" kv filedoffset methodoffset
 
-  where filedoffset = M.fromList $ [(".hierarchy",0),(".ctname",1)]
+  where filedoffset = M.fromList $ [(".hierarchy",0),(".hierarchy_len",1)]
         methodoffset = M.empty
         makeConstr ct = do let hierarchyt = FFI.pointerType (FFI.pointerType FFI.int8Type 0) 0
                            kt <- lift $ functionType False FFI.voidType [FFI.pointerType ct 0]
                            kv <- newNamedFunction FFI.ExternalLinkage (genConstrSym "Object") kt []
                            defineFunction kv $ \params -> do
                              let thisv = snd $ params !! 0
-                             scnv <- addGlobalString "Object" ".str"
-                             cnv <- gep thisv [0,1] ".ctname"
-                             store scnv cnv
-                             av <- genHierarchy "Object" ["Object"] 
-                             h <-  gep thisv [0,0] ".hierarchy"
+                             av <- genHierarchy "Object" ["Object"]
+                             hv <-  gep thisv [0,0] ".hierarchy"
                              av' <- bitCast av $ hierarchyt
-                             store av' h
+                             store av' hv
+                             hlv <- gep thisv [0,1] ".hierarchy_len"                             
+                             store (constInt FFI.int32Type 1) hlv
                              retVoid
                            return kv
 
@@ -91,23 +88,39 @@ buildSystemStaticClassInfo = do
   randsigs <- rand
   (printssig,printlnssig) <- prints
   runtime_castcheckv <- runtime_castcheck
+  runtime_mallocv <- runtime_malloc
+  runtime_heapsizev <- runtime_heapsize
+  runtime_gcollectv <- runtime_gcollect
   
   let m = [("srand",srandsigs),("rand",randsigs),
            ("print",printssig),("println",printlnssig),
-           (".runtime_castcheck",runtime_castcheckv)
+           (".runtime_castcheck",runtime_castcheckv),
+           (".runtime_malloc",runtime_mallocv),
+           ("heapsize",runtime_heapsizev),
+           ("gcollect",runtime_gcollectv)
           ]
   return $ M.fromList m
 
   where
     me = M.empty
+    runtime_malloc = do
+      let mallocrt = FFI.pointerType FFI.int8Type 0
+      sizet <- lift $ FFI.sizeOf FFI.int32Type >>= FFI.typeOf
+      malloct <- lift $ functionType False mallocrt [sizet]
+      mallocv <- newNamedFunction FFI.ExternalLinkage ("GC_malloc") malloct []
+      return $ M.insert [] mallocv me 
+    runtime_heapsize = do
+      let heapsizert = FFI.int32Type
+      heapsizet <- lift $ functionType False heapsizert []
+      heapsizev <- newNamedFunction FFI.ExternalLinkage ("GC_get_heap_size") heapsizet []
+      return $ M.insert [] heapsizev me
+    runtime_gcollect = do
+      let gcollectrt = FFI.voidType
+      gcollectt <- lift $ functionType False gcollectrt []
+      gcollectv <- newNamedFunction FFI.ExternalLinkage ("GC_gcollect") gcollectt []
+      return $ M.insert [] gcollectv me
     runtime_castcheck = do
       let stringt = (FFI.pointerType FFI.int8Type 0)
-      {--
-      let strcmprt = FFI.int32Type
-      
-      strcmpt <- lift $ functionType False randrt [stringt,stringt]
-      strcmpv <- newNamedFunction FFI.ExternalLinkage ("strcmp") strcmp []
-      --}
       let checkrt = FFI.voidType
       checkt <- lift $ functionType False checkrt [stringt,FFI.pointerType stringt 0,FFI.int32Type]
       checkv <- newNamedFunction FFI.ExternalLinkage ("runtime_castcheck") checkt []
@@ -121,15 +134,19 @@ buildSystemStaticClassInfo = do
       let srandrt = FFI.voidType
       srandt <- lift $ functionType False srandrt [FFI.int32Type]
       srandv <- newNamedFunction FFI.ExternalLinkage ("srand") srandt []
+      let timert = FFI.int64Type
+      timet <- lift $ functionType False timert [FFI.pointerType FFI.int64Type 0]
+      timev <- newNamedFunction FFI.ExternalLinkage ("time") timet []
 
       let wrapsrandrt = FFI.voidType
       wrapsrandt <- lift $ functionType False wrapsrandrt []
       wrapsrandv <- newNamedFunction FFI.ExternalLinkage ("wrapsrand") wrapsrandt []
 
       defineFunction wrapsrandv $ \_ -> do
-        r <- tmpVal $ alloca FFI.int32Type
-        r' <- load r
-        tmpVal $ call srandv [r']
+        let null = FFI.constNull (FFI.pointerType FFI.int64Type 0)
+        t <- tmpVal $ call timev [null]
+        t' <- trunc t FFI.int32Type
+        tmpVal $ call srandv [t']
         retVoid
 
       return $ M.insert [] wrapsrandv me
@@ -163,7 +180,7 @@ buildSystemStaticClassInfo = do
               let printrt = FFI.voidType
               printt <- lift $ functionType False printrt [t]
               printv <- newNamedFunction FFI.ExternalLinkage (name) printt []
-              --addAttribute printfIntv AlwaysInlineAttribute
+              lift $ FFI.addFunctionAttr printv $ 2^25 -- LLVMInlineHintAttribute
               defineFunction printv $ \params -> do
                 formatv <- addGlobalString format ".str"
                 v <- conv $ snd $ params!!0
@@ -447,13 +464,13 @@ genClass cte (ClassDecl _ cn _ fs ms) = do
               mapM (uncurry $ initField env this cn) cps
               mapM (uncurry $ initMethod env this cn) mvs
               hierarchyv <- runLLVMCodeGen M.empty env (getField this cn ".hierarchy")
-              ctname <- runLLVMCodeGen M.empty env (getField this cn ".ctname")
-              
-              cnv <- addGlobalString cn ".str"
-              store cnv ctname
-              hv <- genHierarchy cn $ getHierarchy cie cn
+              let hierarchy = getHierarchy cie cn
+              hv <- genHierarchy cn hierarchy
               hv' <- bitCast hv hierarchyt
+
+              hierarchyv_len <- runLLVMCodeGen M.empty env (getField this cn ".hierarchy_len")
               store hv' hierarchyv
+              store (constInt FFI.int32Type (length hierarchy)) hierarchyv_len
               retVoid
        
               where initField env this cn fn fv = do
@@ -471,7 +488,6 @@ genClass cte (ClassDecl _ cn _ fs ms) = do
 
 genHierarchy :: String -> [String] -> CodeGenFunction Value
 genHierarchy cn h = do
-  trace (show h) $ return ()
   modul <- lift $ getModule
   h' <- mapM (flip addGlobalString ".str") h
   g <- lift2 $ withArrayLen h' $ \len ptr -> do
@@ -481,8 +497,7 @@ genHierarchy cn h = do
            g <- FFI.addGlobal modul at namePtr
            let arr = FFI.constArray stringt ptr $ fromIntegral len
            FFI.setInitializer g arr
-           return arr
-  --  gep g [0] ".t"
+           return g
   return g
 
 getMethodClassType :: T.ClassTypeEnv -> ClassName -> MethodName -> LLVMCodeGenMethod ClassInfo
@@ -561,12 +576,15 @@ genExp = genE
           v <- genE e
           lift2 $ load v
         genE (New _ cn ps) = do
-          (cie,_) <- ask
+          (cie,sci) <- ask
           vs <- mapM genE ps
-          ci <- lift4 $getClassInfo cie cn
+          ci <- lift4 $ getClassInfo cie cn
+          mallocv <- getStaticCallValue sci "System" ".runtime_malloc" []
           let kv = constr ci
+          size <- lift4 $ FFI.sizeOf (classType ci)
+          this' <- lift2 $ tmpVal $ call mallocv [size]
+          this <- lift2 $ bitCast this' $ FFI.pointerType (classType ci) 0
           kpts <- lift4 $ getFunctionType kv >>= getFunctionParamTypes
-          this <- lift2 $ tmpVal $ malloc $ classType ci
           pvs <- lift2 $ mapM (uncurry bitCast) $ zip (this:vs) kpts
           lift2 $ tmpVal $ call kv pvs
           return this
@@ -603,30 +621,37 @@ genExp = genE
                "&&" -> and l r
                "||" -> or l r
                _  -> error $ "Operation (" ++ op ++ ") not supported"
-        genE (Cast _ tn e) = do
+        genE (Cast (i,_) tn e) = do
           let stringt = FFI.pointerType FFI.int8Type 0
           let hierarchyt = FFI.pointerType stringt 0    
-          (_,sci) <- ask
+          en@(cie,sci) <- ask
           ev <- genE e
           let t = T.getExpType e
           if T.primitiveType t then return ev
             else do
-             checkcastv <- getStaticCallValue sci "System" ".runtime_castcheck" []
-             cn <- getClassName t
-             ctnv <- getField ev cn ".ctname"
-             hv <- getField ev cn ".hierarchy"
-             hv' <- lift2 $ load hv
-             ctnv' <- lift2 $ load ctnv
-             ts <- lift4 $ newCString tn
-             tnv <- lift2 $ addGlobalString tn ".str"
-             tnv' <- lift2 $ bitCast tnv stringt
-             let tv = FFI.constString ts (fromIntegral $ length tn) (fromIntegral 0)
---             tv' <- lift2 $ bitCast tv stringt
---             let tv' = FFI.constNull stringt
-             let tv' = tnv'
-             let len = FFI.constInt FFI.int32Type (fromIntegral 1) (fromIntegral 0)
-             lift2 $ tmpVal $ call checkcastv [ctnv',hv',len]
-             return ev
+               lcheck <- lift2 $ newNamedBasicBlock ".l.if-then"
+               lend <- lift2 $  newNamedBasicBlock ".l.if-end"
+               null <- genE $ Null (i,t)
+               isnull <- lift2 $ tmpVal $ iCmp IEq ev null
+               lift2 $ brCond isnull lend lcheck
+               
+               lift2 $ defineBasicBlock lcheck
+               checkcastv <- lift2 $ getStaticCallValue sci "System" ".runtime_castcheck" []
+               cn <- getClassName t
+               hv <- getField ev cn ".hierarchy"
+               hlenv <- getField ev cn ".hierarchy_len"
+               hv' <- lift2 $ load hv
+               hlenv' <- lift2 $ load hlenv
+               ts <- lift4 $ newCString tn
+               tnv <- lift2 $ addGlobalString tn ".str"
+               tnv' <- lift2 $ bitCast tnv stringt
+               let tv = FFI.constString ts (fromIntegral $ length tn) (fromIntegral 0)
+               lift2 $ tmpVal $ call checkcastv [tnv',hv',hlenv']
+               lift2 $ br lend
+               
+               lift2 $ defineBasicBlock lend
+               t' <- lift4 $ runReaderT (type2LLVMType $ T.typename2Type tn) cie
+               lift2 $ bitCast ev t'
               
               where getClassName (T.TObjId cn) = return cn
                     getClassName _ = error "Not a class"
@@ -699,6 +724,14 @@ genStatement _ (Declaration (_,t) _ vn) = do
   (cie,_) <- ask
   llvmt <- lift4 $ runReaderT (type2LLVMType t) cie
   vv <- lift2 $ alloca llvmt $ genUserVarSym vn
+  let T.TRef t' = t
+  v <- case t' of 
+         T.TInt -> return $ constInt FFI.int32Type 0
+         T.TBool -> return $ constInt FFI.int1Type 0
+         T.TString -> lift2 $ addGlobalString "" ".str"
+         t -> if T.classType t then return $ FFI.constNull llvmt
+                               else error "No one should ask for this type"
+  lift2 $ store v vv
   modify $ M.insert vn vv
   return False
 genStatement _ (Assign (_,t) dste srce) = do

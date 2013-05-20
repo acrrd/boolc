@@ -18,7 +18,7 @@ class Main
 
   LinkedList newList() { 
     LinkedList list;
-    list = new LinkedList(new ListItem(0,null,null));
+    list = new LinkedList(new ListItem(null,null,null));
     list.clear();
     return list;
   }
@@ -31,7 +31,7 @@ class Main
     while(i<num_elems)
     {
       i=i+1;
-      list.insertAfter(System.rand()%1000,it);
+      list.insertAfter(new Integer(System.rand()%1000),it);
       it.next();
     }
   }
@@ -44,7 +44,7 @@ class Main
 
     while(it.hasMoreElements())
     {
-	int elem; elem = it.nextElement();
+	int elem; elem = this.getValue(it.nextElement());
         System.print(elem); System.print(" ");
     }
     System.println("");
@@ -52,23 +52,23 @@ class Main
 
   void checkList(LinkedList list)
   {
-    if(this.checkListAux(list.head,list.head))
+    if(this.checkListAux(list.head,list.head.next))
       System.println("Order is correct");
     else System.println("Order is NOT correct");
   }
 
   bool checkListAux(ListItem head,ListItem current)
   {
-    if(head==current) return true;
-    if(current.next == null) return true;
-    int elem; elem = current.data;
-    int nextelem; elem = current.next.data;
-
-    if(elem<nextelem)
-      return this.checkListAux(head,current.next);
+    ListItem next; next = current.next;
+    if(head==next) return true;
+    int elem; elem = this.getValue(current.data);
+    int nextelem; nextelem = this.getValue(next.data);
+    if(elem<=nextelem)
+      return this.checkListAux(head,next);
     else return false;
   }
 
+  int getValue(Object o){ return ((Integer)o).value; }
 
   LinkedList sort(LinkedList list)
   {
@@ -80,17 +80,16 @@ class Main
 
     while(lit.hasMoreElements())
     {
-	int elem; elem = lit.nextElement();
+	Integer elem; elem = (Integer)lit.nextElement();
         bool notbreak; notbreak = true;
 	ListIterator sit;
 	sit = sorted.head();
         sit.next();
-
 	while(sit.hasMoreElements() && notbreak)
 	{
-	    int cur; cur = sit.nextElement();
+	    Integer cur; cur = (Integer)sit.nextElement();
 
-            if(elem<cur)
+            if(elem.value<cur.value)
             {
 		sit.previous();
 		sorted.insertBefore(elem,sit);
@@ -105,8 +104,10 @@ class Main
   }
 }
 
+class Integer { int value; }
+
 class ListItem {
-  int data;
+  Object data;
   ListItem previous;
   ListItem  next;
 
@@ -117,9 +118,7 @@ class ListIterator {
   ListItem pos;
 
   void head() { this.pos = this.owner.head; }
-  void next() { 
-    this.pos = this.pos.next; 
-  }
+  void next() { this.pos = this.pos.next; }
 
   void previous() { this.pos = this.pos.previous; }
 
@@ -127,13 +126,13 @@ class ListIterator {
     return this.pos != this.owner.head;
   }
 
-  int nextElement() {
+  Object nextElement() {
     if (this.pos != this.owner.head) {
-       int data; data  = this.pos.data;
+       Object data; data  = this.pos.data;
        this.next();
        return data;
     }
-    return 0;
+    return null;
   }
 }
 
@@ -147,16 +146,14 @@ class LinkedList {
 
   bool isEmpty() { return this.head.next == this.head; }
 
-  void insertAfter(int data, ListIterator cursor) {
+  void insertAfter(Object data, ListIterator cursor) {
     ListItem newItem;
     newItem = new ListItem(data,cursor.pos,cursor.pos.next);
-    if(newItem == null) System.println("newItem is null");
-    if(newItem.next == null) System.println("newItem.next is null");
     newItem.next.previous = newItem;
     cursor.pos.next = newItem;
   }
 
-  void insertBefore(int data, ListIterator cursor) {
+  void insertBefore(Object data, ListIterator cursor) {
     ListItem newItem;
     newItem = new ListItem(data, cursor.pos.previous, cursor.pos);
     newItem.previous.next = newItem;
@@ -166,18 +163,4 @@ class LinkedList {
   ListIterator head() {
     return new ListIterator(this, this.head);
   }
-
-  ListIterator find(int data) {
-    if (this.isEmpty()) return null;
-
-    ListItem pos;
-    pos = this.head;
-
-    while (pos.next != this.head) {  // There are still elements to be inspected
-      pos = pos.next;
-      if (pos.data == data) return new ListIterator(this, pos);
-    }
-    return null;
-  }
-
 }

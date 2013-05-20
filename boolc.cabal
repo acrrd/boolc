@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                boolc
-version:             0.0.1
+version:             1.0.0
 synopsis:            Basic Object-Oriented Language Compiler
 license:             GPL-3
 author:              Andrea Corradi
