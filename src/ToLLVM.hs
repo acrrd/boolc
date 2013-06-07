@@ -90,6 +90,7 @@ buildSystemStaticClassInfo = do
   runtime_castcheckv <- runtime_castcheck
   runtime_mallocv <- runtime_malloc
   runtime_heapsizev <- runtime_heapsize
+  runtime_heapfreebytesv <- runtime_heapfreebytes
   runtime_gcollectv <- runtime_gcollect
   
   let m = [("srand",srandsigs),("rand",randsigs),
@@ -97,6 +98,7 @@ buildSystemStaticClassInfo = do
            (".runtime_castcheck",runtime_castcheckv),
            (".runtime_malloc",runtime_mallocv),
            ("heapsize",runtime_heapsizev),
+           ("heapfreebytes",runtime_heapfreebytesv),
            ("gcollect",runtime_gcollectv)
           ]
   return $ M.fromList m
@@ -114,6 +116,11 @@ buildSystemStaticClassInfo = do
       heapsizet <- lift $ functionType False heapsizert []
       heapsizev <- newNamedFunction FFI.ExternalLinkage ("GC_get_heap_size") heapsizet []
       return $ M.insert [] heapsizev me
+    runtime_heapfreebytes = do
+      let heapfreebytesrt = FFI.int32Type
+      heapfreebytest <- lift $ functionType False heapfreebytesrt []
+      heapfreebytesv <- newNamedFunction FFI.ExternalLinkage ("GC_get_free_bytes") heapfreebytest []
+      return $ M.insert [] heapfreebytesv me
     runtime_gcollect = do
       let gcollectrt = FFI.voidType
       gcollectt <- lift $ functionType False gcollectrt []
@@ -645,7 +652,7 @@ genExp = genE
                ts <- lift4 $ newCString tn
                tnv <- lift2 $ addGlobalString tn ".str"
                tnv' <- lift2 $ bitCast tnv stringt
-               let tv = FFI.constString ts (fromIntegral $ length tn) (fromIntegral 0)
+               let tv = FFI.constString ts (fromIntegral $ length tn) False
                lift2 $ tmpVal $ call checkcastv [tnv',hv',hlenv']
                lift2 $ br lend
                

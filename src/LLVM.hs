@@ -35,8 +35,7 @@ createModule name =
 functionType :: Bool -> Type -> [Type] -> IO Type
 functionType varargs retType paramTypes =
     withArrayLen paramTypes $ \ len ptr ->
-        return $ FFI.functionType retType ptr (fromIntegral len)
-	       	 		  (fromBool varargs)
+        return $ FFI.functionType retType ptr (fromIntegral len) varargs
 
 structCreateNamed :: String -> IO Type
 structCreateNamed name = do
@@ -47,7 +46,7 @@ structCreateNamed name = do
 structSetBody :: Type -> [Type] -> Bool -> IO ()
 structSetBody struct types packed = do
     withArrayLen types $ \len typesPtr -> do 
-      FFI.structSetBody struct typesPtr (fromIntegral len) (if packed then 1 else 0)
+      FFI.structSetBody struct typesPtr (fromIntegral len) (if packed then True else False)
 
 structTypeNamed :: String -> [Type] -> Bool -> IO Type
 structTypeNamed name types packed = do
@@ -60,7 +59,7 @@ writeBitcodeToFile :: String -> Module -> IO ()
 writeBitcodeToFile name mdl =
     withCString name $ \ namePtr -> do
       rc <- FFI.writeBitcodeToFile mdl namePtr
-      when (rc /= 0) $
+      when (rc /= False) $
         ioError $ userError $ "writeBitcodeToFile: return code " ++ show rc
       return ()
 
@@ -147,7 +146,7 @@ getValueNamePtr v = do
 
 constInt :: Type -> Int -> Value
 constInt t v = do
-  FFI.constInt t (fromIntegral v) (fromIntegral 1)
+  FFI.constInt t (fromIntegral v) True
 
 getFunctionType :: Function -> IO Type
 getFunctionType fun = FFI.typeOf fun >>= getFT
@@ -392,8 +391,8 @@ retVoid = do
   return ()
 
 int1 :: Bool -> Value
-int1 b = FFI.constInt FFI.int1Type (fromIntegral v) (fromIntegral 0)
+int1 b = FFI.constInt FFI.int1Type (fromIntegral v) False
   where v = if b then 1 else 0
 
 int32 :: Int -> Value
-int32 v = FFI.constInt FFI.int32Type (fromIntegral v) (fromIntegral 1)
+int32 v = FFI.constInt FFI.int32Type (fromIntegral v) True

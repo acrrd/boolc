@@ -94,6 +94,7 @@ buildInTypes = Map.insert "Object" (CT "Object" "" [] me me []) $
         sysmethods = Map.fromList [("srand",([[]],TVoid)),
                                    ("rand",([[]],TInt)),
                                    ("heapsize",([[]],TInt)),
+                                   ("heapfreebytes",([[]],TInt)),
                                    ("gcollect",([[]],TVoid)),
                                    ("print",printst),
                                    ("println",printst)
