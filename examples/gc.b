@@ -13,6 +13,20 @@ class Main
     this.test(1000,  1000);
     this.test(10000, 1000);
     this.test(10000, 1000);
+    this.test(1,    1000);
+    this.test(1,    1000);
+
+    System.print("Final heap size is: ");
+    System.print(System.heapsize());
+    System.print(" free heap bytes: ");
+    System.println(System.heapfreebytes());
+    System.gcollect();
+    System.print("After explicit collect ");
+    System.print("final heap size is: ");
+    System.print(System.heapsize());
+    System.print(" free heap bytes: ");
+    System.println(System.heapfreebytes());
+
   }
 
   LinkedList newList() { 
@@ -27,13 +41,16 @@ class Main
     LinkedList list;
     list = this.newList();
     int hsize; hsize = System.heapsize();
+    int hfree; hfree = System.heapfreebytes();
     int i; i = 0;
     
     System.print("Test with "); System.print(num_lists);
     System.print(" lists with "); System.print(num_elems);
     System.print(" elements each.");
     System.print(" Initial heap size is: ");
-    System.println(hsize);
+    System.print(hsize);
+    System.print(" Free heap bytes: ");
+    System.println(hfree);
 
     while(i < num_elems){
         list.clear();
