@@ -89,7 +89,7 @@ reservedOpR op = do currentop <- lookAhead oper
                <?> "operator"
         maximumValidOp op = foldr (\x a -> if (elem x reservedOps) then x else a) "" $ subOps op
         reservedOps = reservedOpNames languageDef
-        subOps op = (reverse $ (inits op) ++ [op])
+        subOps op = reverse $ (inits op)
         symbol = Token.symbol lexer
 
 reservedOp :: String -> Parser ()

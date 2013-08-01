@@ -36,18 +36,18 @@ typecheckingTests =
   ]
 
 testTCExp :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
-             GlobalSymTable -> LocalSymTable -> ClassTypeEnv ->
+             LocalSymTable -> ClassTypeEnv ->
              Expression a -> Type -> Assertion
-testTCExp tc gst lst cte e t = 
-  case runReaderT (evalStateT (tc e) (gst,lst)) cte of
+testTCExp tc lst cte e t = 
+  case runReaderT (evalStateT (tc e) lst) cte of
     Left err -> assertFailure $ show err
     Right t' -> getExpType t' @?= t
 
 testTCExpFail :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
-                 GlobalSymTable -> LocalSymTable -> ClassTypeEnv ->
+                 LocalSymTable -> ClassTypeEnv ->
                  Expression a -> Assertion
-testTCExpFail tc gst lst cte e = 
-  case runReaderT (evalStateT (tc e) (gst,lst)) cte of
+testTCExpFail tc lst cte e = 
+  case runReaderT (evalStateT (tc e) lst) cte of
     Left err -> assertBool "" True
     Right t' -> assertFailure $ "This test should fail but got: " ++ (show $ getExpType t')
 
@@ -82,11 +82,11 @@ testTCFail tc p =
 
 testTCExpEmpty :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
                   Expression a -> Type -> Assertion
-testTCExpEmpty tc = let me = Map.empty in testTCExp tc me me me
+testTCExpEmpty tc = let me = Map.empty in testTCExp tc me me
 
 testTCExpEmptyFail :: (Eq a, Show a) => (Expression a ->  TypeExpressionEnv a (ExpressionT a)) -> 
                       Expression a -> Assertion
-testTCExpEmptyFail tc = let me = Map.empty in testTCExpFail tc me me me
+testTCExpEmptyFail tc = let me = Map.empty in testTCExpFail tc me me
 
 tests_ExpLiteral tc =
   [
@@ -99,8 +99,8 @@ tests_ExpLiteral tc =
 
 tests_ExpVar tc =
   [
-    testCase "var1" $ testTCExp tc me lst1 me (Var () "a") TInt,
-    testCase "var2" $ testTCExpFail tc me me me (Var () "a")
+    testCase "var1" $ testTCExp tc lst1 me (Var () "a") TInt,
+    testCase "var2" $ testTCExpFail tc me me (Var () "a")
   ]
   where me = Map.empty
         lst1 = Map.insert "a" TInt Map.empty
@@ -128,12 +128,12 @@ tests_ExpBinOp tc =
     testCase "binop19" $ testTCExpEmptyFail tc (Negative () str),
     testCase "binop20" $ testTCExpEmpty tc (Not () bool) TBool,
     testCase "binop21" $ testTCExpEmptyFail tc (Not () int),
-    testCase "binop22" $ testTCExp tc me me ctea (eq null null) TBool,
-    testCase "binop23" $ testTCExp tc me me ctea (eq null obj) TBool,
-    testCase "binop24" $ testTCExp tc me me ctea (eq obj null) TBool,
-    testCase "binop25" $ testTCExp tc me me ctea (eq obj obj) TBool,
-    testCase "binop26" $ testTCExpFail tc me me ctea (eq obj int),
-    testCase "binop27" $ testTCExpFail tc me me ctea (eq null int)
+    testCase "binop22" $ testTCExp tc me ctea (eq null null) TBool,
+    testCase "binop23" $ testTCExp tc me ctea (eq null obj) TBool,
+    testCase "binop24" $ testTCExp tc me ctea (eq obj null) TBool,
+    testCase "binop25" $ testTCExp tc me ctea (eq obj obj) TBool,
+    testCase "binop26" $ testTCExpFail tc me ctea (eq obj int),
+    testCase "binop27" $ testTCExpFail tc me ctea (eq null int)
   ]
   where me = Map.empty
         int = (I () 0)
@@ -149,11 +149,11 @@ tests_ExpBinOp tc =
 
 tests_ExpNew tc = 
   [
-    testCase "new1" $ testTCExp tc me me ctea (new "A" []) $ TObjId "A",
-    testCase "new2" $ testTCExp tc me me cteb (new "B" [(I () 3)]) $ TObjId "B",
-    testCase "new3" $ testTCExpFail tc me me cteb (new "B" []),
-    testCase "new4" $ testTCExp tc me me ctec (new "C" [(I () 3),(B () True)]) $ TObjId "C",
-    testCase "new5" $ testTCExpFail tc me me cteill (new "I" [(I () 3)])
+    testCase "new1" $ testTCExp tc me ctea (new "A" []) $ TObjId "A",
+    testCase "new2" $ testTCExp tc me cteb (new "B" [(I () 3)]) $ TObjId "B",
+    testCase "new3" $ testTCExpFail tc me cteb (new "B" []),
+    testCase "new4" $ testTCExp tc me ctec (new "C" [(I () 3),(B () True)]) $ TObjId "C",
+    testCase "new5" $ testTCExpFail tc me cteill (new "I" [(I () 3)])
   ]
   where me = Map.empty
         new = New ()
@@ -169,10 +169,10 @@ tests_ExpCast tc =
   [
     testCase "cast1" $ testTCExpEmpty tc (cast "int" int) TInt,
     testCase "cast2" $ testTCExpEmptyFail tc (cast "int" bool),
-    testCase "cast3" $ testTCExpFail tc me me ctec (cast "C" bool),
-    testCase "cast4" $ testTCExp tc me me ctebc (cast "C" $ new "B") $ TObjId "C",
-    testCase "cast5" $ testTCExp tc me me cteabc (cast "C" $ new "A") $ TObjId "C",
-    testCase "cast6" $ testTCExpFail tc me me ctedc (cast "D" $ new "A")
+    testCase "cast3" $ testTCExpFail tc me ctec (cast "C" bool),
+    testCase "cast4" $ testTCExp tc me ctebc (cast "C" $ new "B") $ TObjId "C",
+    testCase "cast5" $ testTCExp tc me cteabc (cast "C" $ new "A") $ TObjId "C",
+    testCase "cast6" $ testTCExpFail tc me ctedc (cast "D" $ new "A")
   ]
   where me = Map.empty
         cast = Cast ()
@@ -188,8 +188,8 @@ tests_ExpCast tc =
 
 tests_ExpDeRef tc =
   [
-    testCase "deref1" $ testTCExp tc me lst1 me (DeRef () $ Var () "a") TInt,
-    testCase "deref2" $ testTCExpFail tc me lst2 me (DeRef () $ Var () "a")
+    testCase "deref1" $ testTCExp tc lst1 me (DeRef () $ Var () "a") TInt,
+    testCase "deref2" $ testTCExpFail tc lst2 me (DeRef () $ Var () "a")
   ]
   where me = Map.empty
         lst1 = Map.insert "a" (TRef TInt) Map.empty
@@ -197,9 +197,9 @@ tests_ExpDeRef tc =
 
 tests_ExpFieldAccess tc =
   [
-    testCase "fieldaccess1" $ testTCExp tc me me ctea (fielda "f" (new "A" [I () 1])) TInt,
-    testCase "fieldaccess2" $ testTCExp tc me me cteb (fielda "f" (new "B" [I () 1])) TInt,
-    testCase "fieldaccess3" $ testTCExpFail tc me me cteb (fielda "g" (new "B" [I () 1]))
+    testCase "fieldaccess1" $ testTCExp tc me ctea (fielda "f" (new "A" [I () 1])) TInt,
+    testCase "fieldaccess2" $ testTCExp tc me cteb (fielda "f" (new "B" [I () 1])) TInt,
+    testCase "fieldaccess3" $ testTCExpFail tc me cteb (fielda "g" (new "B" [I () 1]))
   ]
   where me = Map.empty
         new = New () 
@@ -210,16 +210,16 @@ tests_ExpFieldAccess tc =
 
 tests_ExpMethodCall tc =
   [
-    testCase "methodcall1" $ testTCExp tc me me ctea (methodc "m" [] (new "A" [])) TInt,
-    testCase "methodcall2" $ testTCExp tc me me cteb (methodc "m" [] (new "B" [])) TInt,
-    testCase "methodcall3" $ testTCExp tc me me ctec (methodc "m" [] (new "C" [])) TInt,
-    testCase "methodcall4" $ testTCExpFail tc me me ctea (methodc "g" [] (new "A" [])),
-    testCase "methodcall5" $ testTCExpFail tc me me ctea (methodc "m" [I () 1] (new "A" [])),
-    testCase "methodcall6" $ testTCExp tc me me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt,
-    testCase "methodcall7" $ testTCExpFail tc me me ctea1 (methodc "m" [] (new "A" [])),
-    testCase "methodcall8" $ testTCExp tc me me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt,
-    testCase "methodcall9" $ testTCExp tc me me ctes1 (methodc "m" [] (var "S")) TInt,
-    testCase "methodcall10" $ testTCExpFail tc me me ctes2 (methodc "m" [] (var "S"))
+    testCase "methodcall1" $ testTCExp tc me ctea (methodc "m" [] (new "A" [])) TInt,
+    testCase "methodcall2" $ testTCExp tc me cteb (methodc "m" [] (new "B" [])) TInt,
+    testCase "methodcall3" $ testTCExp tc me ctec (methodc "m" [] (new "C" [])) TInt,
+    testCase "methodcall4" $ testTCExpFail tc me ctea (methodc "g" [] (new "A" [])),
+    testCase "methodcall5" $ testTCExpFail tc me ctea (methodc "m" [I () 1] (new "A" [])),
+    testCase "methodcall6" $ testTCExp tc me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt,
+    testCase "methodcall7" $ testTCExpFail tc me ctea1 (methodc "m" [] (new "A" [])),
+    testCase "methodcall8" $ testTCExp tc me ctea1 (methodc "m" [I () 1] (new "A" [])) TInt,
+    testCase "methodcall9" $ testTCExp tc me ctes1 (methodc "m" [] (var "S")) TInt,
+    testCase "methodcall10" $ testTCExpFail tc me ctes2 (methodc "m" [] (var "S"))
   ]
   where me = Map.empty
         new = New () 
@@ -308,3 +308,4 @@ tests_IsWellFormed tc =
         md = MethodDecl ()
         noop = NoOp ()
         pd = ParameterDecl ()
+

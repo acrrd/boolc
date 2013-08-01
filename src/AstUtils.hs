@@ -25,7 +25,10 @@ desugar (Program cds) = Program $ map desugarCD cds
         desugarStm (If i c st se) = liftM3 (If i) (desugarExp c) (desugarStm st) (desugarStm se)
         desugarStm (While i c s) = liftM2 (While i) (desugarExp c) (desugarStm s)
         desugarStm (Return i e) = liftM (Return i) (desugarExp e)
-        desugarStm (Block ss) = liftM Block $ mapM desugarStm ss
+        desugarStm (Block ss) = do s <- get
+                                   stm <- liftM Block $ mapM desugarStm ss
+                                   put s
+                                   return stm
         desugarStm (Assign i el er) = liftM2 (Assign i) (desugarAssign el) (desugarExp er)
 
         desugarAssign :: Expression a -> State (Set.Set VarName) (Expression a)

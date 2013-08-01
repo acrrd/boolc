@@ -9,7 +9,6 @@ import Control.Monad
 import Control.Monad.Error
 import Control.Monad.State
 import Control.Monad.Reader
-import Data.Functor.Identity
 import Data.List
 
 type ExpressionT a = Expression (a,Type)
@@ -56,12 +55,11 @@ instance Error (TypeError a) where
   noMsg = MiscError "Unknown error"
   strMsg str = MiscError str
 
-type GlobalSymTable = Map.Map VarName Type
 type LocalSymTable = Map.Map VarName Type
 
 type BaseComputation i = Either (TypeError i)
 type TypesystemEnv i = ReaderT ClassTypeEnv (BaseComputation i)
-type TypeExpressionEnv i = StateT (GlobalSymTable,LocalSymTable) (TypesystemEnv i)
+type TypeExpressionEnv i = StateT LocalSymTable (TypesystemEnv i)
 -- the env is the type used to type return
 type TypeStatementEnv i = ReaderT Type (TypeExpressionEnv i)
 type BuildClassEnvComp i = StateT ClassTypeEnv (BaseComputation i)
@@ -234,7 +232,7 @@ getExpType (B (_,t) _) = t
 getExpType (S (_,t) _) = t
 getExpType (Void (_,t)) = t
 getExpType (Null (_,t)) = t
-getExpType (Var (_,t) x) = t
+getExpType (Var (_,t) _) = t
 getExpType (Additive (_,t) _ _ _) = t
 getExpType (Multiplicative (_,t) _ _ _) = t
 getExpType (Relational (_,t) _ _ _) = t
@@ -243,7 +241,7 @@ getExpType (Boolean (_,t) _ _ _) = t
 getExpType (Negative (_,t) _) = t
 getExpType (Not (_,t) _) = t
 getExpType (Cast (_,t) _ _) = t
-getExpType (FieldAccess (_,t) fn e) = t
+getExpType (FieldAccess (_,t) _ _) = t
 getExpType (MethodCall (_,t) _ _ _) = t
 getExpType (StaticMethodCall (_,t) _ _ _ _) = t
 getExpType (New (_,t) _ _) = t
@@ -256,12 +254,10 @@ typeExp (B i v) = return $ B (i,TBool) v
 typeExp (S i v) = return $ S (i,TString) v
 typeExp (Void i) = return $ Void (i,TVoid)
 typeExp (Null i) = return $ Null (i,TNull)
-typeExp (Var i x) = do (gst,lst) <- get
+typeExp (Var i x) = do lst <- get
                        case Map.lookup x lst of
                          Just t -> return $ Var (i,t) x
-                         Nothing -> case Map.lookup x gst of
-                                     Just t -> return $ Var (i,t) x
-                                     Nothing -> throwError $ NotDeclaredVar x i
+                         Nothing -> throwError $ NotDeclaredVar x i
 typeExp (Additive i op l r) = typeBinOp op i Additive l r [TInt] TInt
 typeExp (Multiplicative i op l r) = typeBinOp op i Multiplicative l r [TInt] TInt
 typeExp (Relational i op l r) = typeBinOp op i Relational l r [TInt] TBool
@@ -288,7 +284,7 @@ typeExp (MethodCall i mn ps e) = do
   ee <- typeExpGetSymbol e
   ps' <- mapM typeExp ps
   case ee of
-    ClassSymbol (_,t) x -> do (ps,rt,sig) <- typeMethodCall i (TObjId x) mn ps'
+    ClassSymbol (_,_) x -> do (ps,rt,sig) <- typeMethodCall i (TObjId x) mn ps'
                               return $ StaticMethodCall (i,rt) mn ps x sig
     _ -> do let et = getExpType ee
             (ps,rt,_) <- typeMethodCall i et mn ps'
@@ -323,7 +319,7 @@ typeExp (DeRef i e) = do ee <- typeExp e
                          case t of
                            TRef t' -> return $ DeRef (i,t') ee
                            _ -> throwError $ NotDereferencable i t
-typeExp t = throwError $ MiscError $ "No one shuld ask for typecheck this, it is only internal stuff"
+typeExp _ = throwError $ MiscError $ "No one shuld ask for typecheck this, it is only internal stuff"
 
 getContrFields :: a -> ClassName -> TypesystemEnv a [FieldName]
 getContrFields i cn = do (CT _ pn kn _ _ _) <- getClassType i cn
@@ -461,7 +457,7 @@ typeParameters i psts ps' = do if null psts && null ps' then return ([],[])
 typeStatement :: (Statement a) -> TypeStatementEnv a (StatementT a)
 typeStatement (NoOp i) = return $ NoOp (i,TVoid)
 typeStatement (Declaration i t vn) = do lift $ lift $ typeExist t i
-                                        (gst,lst) <- lift get
+                                        lst <- lift get
                                         when (Map.member vn lst) $ throwError $ DuplicateVariable vn i
                                         cte <- lift $ ask
                                         when (not $ Map.member t primitiveTypesMap) $ do
@@ -469,7 +465,7 @@ typeStatement (Declaration i t vn) = do lift $ lift $ typeExist t i
                                             Nothing -> throwError $ MiscError "Bug in typeExist?"
                                             Just (CT _ _ _ _ _ mods) -> when (any (==Static) mods) $ throwError $ StaticClass i t
                                         let tt = TRef $ typename2Type t
-                                        lift $ put (gst, Map.insert vn tt lst)
+                                        lift $ put $ Map.insert vn tt lst
                                         return $ Declaration (i,tt) t vn
 typeStatement (ExpStm e) = liftM ExpStm (lift $ typeExp e)
 typeStatement (Assign i e e') = do ee <- lift $ typeExp e
@@ -504,7 +500,10 @@ typeStatement (Return i e ) = do ee <- lift $ typeExp e
                                  case et of
                                    TNull -> return  $ Return (i,rt) $ updateType rt ee
                                    _ -> return $ Return (i,rt) ee
-typeStatement (Block ss) = liftM Block $ mapM typeStatement ss
+typeStatement (Block ss) = do lst <- lift $ get
+                              s <- liftM Block $ mapM typeStatement ss
+                              lift $ put lst
+                              return s
 
 
 typeProgram :: Program a -> TypesystemEnv a (ProgramT a)
@@ -534,7 +533,7 @@ typeProgram (Program cds) = liftM Program $ mapM typeClass cds
              let pst = foldr (\(ParameterDecl (_,t) _ vn) a -> Map.insert vn (TRef t) a) Map.empty ps'
              let lst = Map.insert "this" (typename2Type cn) $ pst
              let rt = typename2Type rtn
-             let b' = evalStateT (runReaderT (typeStatement b) rt) (globalSymbols,lst)
+             let b' = evalStateT (runReaderT (typeStatement b) rt) lst
              liftM (MethodDecl (i,rt) rtn mn ps') b'
 
         checkNotStatic i cn cte =
